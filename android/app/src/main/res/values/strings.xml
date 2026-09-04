@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">winners-health</string>
+    <string name="title_activity_main">winners-health</string>
+    <string name="package_name">com.winnershealth.app</string>
+    <string name="custom_url_scheme">com.winnershealth.app</string>
+</resources>
