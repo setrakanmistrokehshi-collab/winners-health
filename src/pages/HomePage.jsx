@@ -3,11 +3,14 @@ import { Link } from 'react-router-dom';
 import { products as productsApi } from '@/api/client';
 import { ProductCard, PageLoader } from '@/components/ui';
 import { 
-  ShieldPlus, 
+  ShieldPlus,
+  ShieldCheck,
+  Truck, 
+  BadgeCheck,
   Flame, 
   Pill, 
   Scale, 
-  Flower2, 
+  Flower2,
   HeartPulse 
 } from 'lucide-react';
 
@@ -63,7 +66,7 @@ export default function HomePage() {
 
         <div className='container' style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ maxWidth: 680 }}>
-            <div className='animate-fade-up' style={{
+            {/* <div className='animate-fade-up' style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
               background: 'rgba(66,133,244,0.18)', border: '1px solid rgba(66,133,244,0.4)',
               borderRadius: 'var(--radius-full)', padding: '6px 16px',
@@ -73,7 +76,7 @@ export default function HomePage() {
               <span style={{ color: 'var(--sage-light)', fontSize: 13, fontWeight: 500, letterSpacing: '0.04em' }}>
                 Premium Nigerian Wellness
               </span>
-            </div>
+            </div> */}
 
             <h1 className='animate-fade-up' style={{
               fontFamily: 'var(--font-display)', fontSize: 'clamp(40px, 7vw, 80px)',
@@ -197,6 +200,72 @@ export default function HomePage() {
           )}
         </div>
       </section>
+
+     {/* ── Trust strip ──────────────────────────────────────────── */}
+<section
+  style={{
+    padding: '12px 0',
+    backgroundColor: '#f8fafc', // light gray background
+    borderBottom: '1px solid #e2e8f0',
+  }}
+  aria-label="Trust signals"
+>
+  <div
+    style={{
+      maxWidth: '1200px',
+      margin: '0 auto',
+      padding: '0 16px',
+      display: 'flex',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: '24px 40px',
+    }}
+  >
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontSize: '14px',
+        fontWeight: 500,
+        color: '#334155',
+      }}
+    >
+      <ShieldCheck size={20} strokeWidth={1.75} aria-hidden="true" style={{ color: '#0f766e' }} />
+      <span>Secure checkout</span>
+    </div>
+
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontSize: '14px',
+        fontWeight: 500,
+        color: '#334155',
+      }}
+    >
+      <Truck size={20} strokeWidth={1.75} aria-hidden="true" style={{ color: '#0f766e' }} />
+      <span>Fast delivery</span>
+    </div>
+
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontSize: '14px',
+        fontWeight: 500,
+        color: '#334155',
+      }}
+    >
+      <BadgeCheck size={20} strokeWidth={1.75} aria-hidden="true" style={{ color: '#0f766e' }} />
+      <span>Quality guaranteed</span>
+    </div>
+  </div>
+</section>
+      
 
       {/* ── Newsletter ────────────────────────────────────────────── */}
       <section className='section-pad' style={{ padding: 'var(--space-20) 0', background: 'var(--parchment)' }}>
