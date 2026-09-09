@@ -6,7 +6,7 @@ import useAuthStore from '@/context/authStore';
 import { Field } from '@/components/ui';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
 import toast from 'react-hot-toast';
-import { Leaf, Check } from 'lucide-react';
+import { Leaf, Check, Eye, EyeOff } from 'lucide-react';
 
 // ── Shared Auth Card Shell (same as Login – already responsive-ready) ──
 function AuthShell({ title, subtitle, children }) {
@@ -154,6 +154,8 @@ export function RegisterPage() {
     watch,
     formState: { errors },
   } = useForm();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const password = watch('password');
 
@@ -233,27 +235,71 @@ export function RegisterPage() {
           </Field>
 
           <Field label="Password" error={errors.password?.message}>
-            <input
-              className={`input ${errors.password ? 'error' : ''}`}
-              type="password"
-              placeholder="Create a password"
-              {...register('password', {
-                required: 'Password is required',
-                minLength: { value: 6, message: 'Minimum 6 characters' },
-              })}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                className={`input ${errors.password ? 'error' : ''}`}
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Create a password"
+                style={{ paddingRight: 44 }}
+                {...register('password', {
+                  required: 'Password is required',
+                  minLength: { value: 6, message: 'Minimum 6 characters' },
+                })}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                style={{
+                  position: 'absolute',
+                  right: 12,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--muted)',
+                  display: 'flex',
+                  padding: 0,
+                }}
+              >
+                {showPassword ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
+              </button>
+            </div>
           </Field>
 
           <Field label="Confirm Password" error={errors.confirmPassword?.message}>
-            <input
-              className={`input ${errors.confirmPassword ? 'error' : ''}`}
-              type="password"
-              placeholder="Repeat your password"
-              {...register('confirmPassword', {
-                required: 'Please confirm your password',
-                validate: (value) => value === password || 'Passwords do not match',
-              })}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                className={`input ${errors.confirmPassword ? 'error' : ''}`}
+                type={showConfirm ? 'text' : 'password'}
+                placeholder="Repeat your password"
+                style={{ paddingRight: 44 }}
+                {...register('confirmPassword', {
+                  required: 'Please confirm your password',
+                  validate: (value) => value === password || 'Passwords do not match',
+                })}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm((v) => !v)}
+                aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                style={{
+                  position: 'absolute',
+                  right: 12,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--muted)',
+                  display: 'flex',
+                  padding: 0,
+                }}
+              >
+                {showConfirm ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
+              </button>
+            </div>
           </Field>
 
           <button

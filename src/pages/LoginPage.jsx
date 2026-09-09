@@ -6,7 +6,7 @@ import { auth as authApi } from '@/api/client';
 import { Field } from '@/components/ui';
 import GoogleSignInButton  from '@/components/GoogleSignInButton';
 import toast from 'react-hot-toast';
-import { Leaf, Check, Mail, AlertTriangle, CheckCircle2, ChevronLeft } from 'lucide-react';
+import { Leaf, Check, Mail, AlertTriangle, CheckCircle2, ChevronLeft, Eye, EyeOff } from 'lucide-react';
 
 // ── Shared Auth Card Shell ────────────────────────────────────────
 // Centered card layout (matches the approved reference template:
@@ -97,7 +97,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { register, handleSubmit, formState: { errors } } = useForm();
-
+  const [showPassword, setShowPassword] = useState(false);
   const onSubmit = async (data) => {
     const result = await login(data);
     if (result.success) {
@@ -141,8 +141,17 @@ export function LoginPage() {
               {...register('email', { required: 'Email is required' })} />
           </Field>
           <Field label='Password' error={errors.password?.message}>
-            <input className={`input ${errors.password ? 'error' : ''}`} type='password' placeholder='Your password'
-              {...register('password', { required: 'Password is required' })} />
+            <div style={{ position: 'relative' }}>
+              <input className={`input ${errors.password ? 'error' : ''}`} type={showPassword ? 'text' : 'password'} placeholder='Your password'
+                {...register('password', { required: 'Password is required' })} />
+              <button
+                type='button'
+                onClick={() => setShowPassword(!showPassword)}
+                style={{ position: 'absolute', right: 12, top: 12 }}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </Field>
           <div style={{ textAlign: 'right' }}>
             <Link to='/forgot-password' style={{ fontSize: 13, color: 'var(--sage)' }}>Forgot password?</Link>
@@ -172,6 +181,7 @@ export function LoginPage() {
 export function ForgotPasswordPage() {
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
   const [sent, setSent] = useState(false);
+
 
   const onSubmit = async (data) => {
     try {
@@ -213,7 +223,6 @@ export function ForgotPasswordPage() {
 // ── Reset Password ────────────────────────────────────────────────
 // authApi.resetPassword(token, password) is assumed to mirror the
 // forgotPassword(email) shape above — check /api/client and rename
-// if your backend expects e.g. authApi.resetPassword({ token, password }).
 export function ResetPasswordPage() {
   const { token } = useParams();
   // Fallback in case your email link uses a query string instead of
@@ -230,6 +239,8 @@ export function ResetPasswordPage() {
   } = useForm();
   const [done, setDone] = useState(false);
   const [invalid, setInvalid] = useState(!resetToken);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const password = watch('password', '');
 
@@ -293,23 +304,75 @@ const onSubmit = async (data) => {
     <AuthShell title="Set a new password" subtitle="Choose something strong and memorable">
       <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <Field label='New Password' error={errors.password?.message}>
-          <input className={`input ${errors.password ? 'error' : ''}`} type='password' placeholder='Enter new password'
-            {...register('password', {
-              required: 'Password is required',
-              minLength: { value: 8, message: 'At least 8 characters' },
-              pattern: {
-                value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
-                message: 'Include upper, lower case and a number',
-              },
-            })} />
+          <div style={{ position: 'relative' }}>
+            <input
+              className={`input ${errors.password ? 'error' : ''}`}
+              type={showPassword ? 'text' : 'password'}
+              placeholder='Enter new password'
+              style={{ paddingRight: 44 }}
+              {...register('password', {
+                required: 'Password is required',
+                minLength: { value: 8, message: 'At least 8 characters' },
+                pattern: {
+                  value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/,
+                  message: 'Include upper, lower case and a number',
+                },
+              })}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              style={{
+                position: 'absolute',
+                right: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--muted)',
+                display: 'flex',
+                padding: 0,
+              }}
+            >
+              {showPassword ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
+            </button>
+          </div>
         </Field>
 
         <Field label='Confirm Password' error={errors.confirm?.message}>
-          <input className={`input ${errors.confirm ? 'error' : ''}`} type='password' placeholder='Re-enter new password'
-            {...register('confirm', {
-              required: 'Please confirm your password',
-              validate: (v) => v === password || 'Passwords do not match',
-            })} />
+          <div style={{ position: 'relative' }}>
+            <input
+              className={`input ${errors.confirm ? 'error' : ''}`}
+              type={showConfirm ? 'text' : 'password'}
+              placeholder='Re-enter new password'
+              style={{ paddingRight: 44 }}
+              {...register('confirm', {
+                required: 'Please confirm your password',
+                validate: (v) => v === password || 'Passwords do not match',
+              })}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm((v) => !v)}
+              aria-label={showConfirm ? 'Hide password' : 'Show password'}
+              style={{
+                position: 'absolute',
+                right: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--muted)',
+                display: 'flex',
+                padding: 0,
+              }}
+            >
+              {showConfirm ? <EyeOff size={18} strokeWidth={1.8} /> : <Eye size={18} strokeWidth={1.8} />}
+            </button>
+          </div>
         </Field>
 
         <button className='btn btn-primary btn-full btn-lg' type='submit' disabled={isSubmitting}>

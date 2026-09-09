@@ -2,15 +2,22 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { products as productsApi } from '@/api/client';
 import { ProductCard, PageLoader } from '@/components/ui';
-import { Shield, Zap, Sun, Dumbbell, Sparkles, Leaf } from 'lucide-react';
+import { 
+  ShieldPlus, 
+  Flame, 
+  Pill, 
+  Scale, 
+  Flower2, 
+  HeartPulse 
+} from 'lucide-react';
 
 const CATEGORIES = [
-  { id: 'immunity', Icon: Shield,   label: 'Immunity', desc: 'Defend & protect' },
-  { id: 'energy',   Icon: Zap,      label: 'Energy',   desc: 'Power your day' },
-  { id: 'vitamins', Icon: Sun,      label: 'Vitamins', desc: 'Essential nutrients' },
-  { id: 'weight',   Icon: Dumbbell, label: 'Weight',   desc: 'Body composition' },
-  { id: 'beauty',   Icon: Sparkles, label: 'Beauty',   desc: 'Glow from within' },
-  { id: 'general',  Icon: Leaf,     label: 'General',  desc: 'Daily wellness' },
+  { id: 'immunity', Icon: ShieldPlus,  label: 'Immunity', desc: 'Defend & protect' },
+  { id: 'energy',   Icon: Flame,       label: 'Energy',   desc: 'Power your day' },
+  { id: 'vitamins', Icon: Pill,        label: 'Vitamins', desc: 'Essential nutrients' },
+  { id: 'weight',   Icon: Scale,       label: 'Weight',   desc: 'Body composition' },
+  { id: 'beauty',   Icon: Flower2,     label: 'Beauty',   desc: 'Glow from within' },
+  { id: 'general',  Icon: HeartPulse,  label: 'General',  desc: 'Daily wellness' },
 ];
 
 export default function HomePage() {

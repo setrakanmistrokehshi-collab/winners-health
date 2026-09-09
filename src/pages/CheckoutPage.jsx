@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+//import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import useCartStore from '@/context/cartStore';
 import useAuthStore from '@/context/authStore';
@@ -22,14 +22,14 @@ const GATEWAY_LABELS = { monnify: 'Monnify', paystack: 'Paystack', nomba: 'Nomba
 export default function CheckoutPage() {
   const { items, clear } = useCartStore();
   const user = useAuthStore((s) => s.user);
-  const  navigate = useNavigate();
+ // const  navigate = useNavigate();
   const [promo, setPromo] = useState('');
   const [promoData, setPromoData] = useState(null);
   const [checkingPromo, setCheckingPromo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [gateway, setGateway] = useState('monnify');
   const currency = useCurrencyStore((s) => s.getCurrent());
-  const { checking: revalidating, changes: priceChanges } = useRevalidateCart();
+  const {  changes: priceChanges } = useRevalidateCart();
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: {
       name: user?.name || '',
