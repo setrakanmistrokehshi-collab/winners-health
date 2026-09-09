@@ -22,7 +22,7 @@ const GATEWAY_LABELS = { monnify: 'Monnify', paystack: 'Paystack', nomba: 'Nomba
 export default function CheckoutPage() {
   const { items, clear } = useCartStore();
   const user = useAuthStore((s) => s.user);
-  const navigate = useNavigate();
+  const  navigate = useNavigate();
   const [promo, setPromo] = useState('');
   const [promoData, setPromoData] = useState(null);
   const [checkingPromo, setCheckingPromo] = useState(false);
@@ -48,14 +48,11 @@ export default function CheckoutPage() {
   const shipping  = calculateShipping(subtotal, discount);
   const total     = subtotal + shipping - discount;
 
-  // Fires once per checkout-page visit with items in cart, not on
-  // every render (subtotal/promo changes shouldn't re-fire it — this
-  // event represents "reached checkout", not "checkout total changed").
   useEffect(() => {
     if (items.length > 0) {
       trackInitiateCheckout(items, subtotal, generateEventId());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    
   }, []);
 
   const handlePromo = async () => {
@@ -265,7 +262,7 @@ function LineItem({ label, value, priceAmount, bold, valueColor }) {
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: bold ? 18 : 14, fontWeight: bold ? 700 : 400, color: bold ? 'var(--forest)' : 'var(--muted)' }}>
       <span>{label}</span>
       {priceAmount !== undefined
-        ? <PriceTag amount={priceAmount} size={bold ? 'lg' : 'sm'} muted={!bold} strike={!bold} />
+        ? <PriceTag amount={priceAmount} size={bold ? 'lg' : 'sm'} muted={!bold} strike={false} />
         : <span style={{ color: valueColor }}>{value}</span>}
     </div>
   );

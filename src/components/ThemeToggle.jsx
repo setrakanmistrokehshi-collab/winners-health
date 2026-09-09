@@ -11,11 +11,11 @@ export default function ThemeToggle() {
   // first visit. Only an explicit past choice (saved in localStorage)
   // switches it to light.
   useEffect(() => {
-    const saved = localStorage.getItem('theme');
-    const isDark = saved ? saved === 'dark' : true;
-    setDark(isDark);
-    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-  }, []);
+  const saved = localStorage.getItem('theme');
+  const isDark = saved ? saved === 'dark' : true;   // same ternary as the working one
+  setDark(isDark);
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+}, []);
 
   const toggle = () => {
     const next = !dark;
@@ -23,6 +23,10 @@ export default function ThemeToggle() {
     document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
     localStorage.setItem('theme', next ? 'dark' : 'light');
   };
+  console.log(
+  document.documentElement.getAttribute('data-theme'),
+  document.documentElement.className
+);
 
   return (
     <button
