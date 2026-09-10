@@ -275,9 +275,8 @@ export const orders = {
   recent: (limit = 10) => api.get('/orders', { params: { limit, sort: '-createdAt' } }),
   
   // Admin
-  all: (params) => api.get('/orders/admin/all', { params }),
-  adminList: (params) => api.get('/orders', { params }),
-  updateStatus: (id, data) => api.patch(`/orders/admin/${id}/status`, data),
+  all: (params) => api.get('/admin/orders', { params }),
+  updateStatus: (id, data) => api.patch(`/admin/orders/${id}/status`, data),
   notifyShipped: (id) => api.post(`/admin/orders/${id}/notify-shipped`),
 };
 
