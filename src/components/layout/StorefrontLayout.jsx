@@ -61,7 +61,11 @@ export default function StorefrontLayout() {
           transition: all 0.3s ease;
         }
         .sf-header.is-scrolled {
-          background: rgba(248, 244, 238, 0.95);
+          /* Was hardcoded rgba(248, 244, 238, 0.95) — a light-cream value
+             baked in regardless of theme. In dark mode that put a
+             near-white bar behind white heading/logo text = invisible
+             on toggle. Now themed: dark in dark mode, cream in light mode. */
+          background: var(--header-scrolled-bg);
           backdrop-filter: blur(12px);
           border-bottom: 1px solid var(--border-light);
         }
@@ -89,7 +93,7 @@ export default function StorefrontLayout() {
           font-family: var(--font-display);
           font-weight: 700;
           font-size: 20px;
-          color: var(--forest-deep);
+          color: var(--text-heading);
           letter-spacing: -0.02em;
           white-space: nowrap;
         }
@@ -127,7 +131,7 @@ export default function StorefrontLayout() {
           transition: background 0.2s;
         }
         .sf-cart:hover {
-          background: rgba(0, 0, 0, 0.05);
+          background: var(--accent-overlay);
         }
         .sf-cart-badge {
           position: absolute;
@@ -136,8 +140,8 @@ export default function StorefrontLayout() {
           min-width: 18px;
           height: 18px;
           padding: 0 5px;
-          background: var(--amber);
-          color: white;
+          background: var(--accent);
+          color: #ffffff;
           border-radius: 999px;
           font-size: 11px;
           font-weight: 700;
@@ -159,8 +163,8 @@ export default function StorefrontLayout() {
           width: 34px;
           height: 34px;
           border-radius: 50%;
-          background: var(--sage);
-          color: white;
+          background: var(--accent);
+          color: #ffffff;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -173,23 +177,28 @@ export default function StorefrontLayout() {
           width: 40px;
           height: 40px;
           align-items: center;
-          justify-content: center;
+          justify-content: right;
           background: none;
           border: none;
           cursor: pointer;
-          color: var(--forest-deep);
+          color: var(--text-heading);
           padding: 0;
           border-radius: 8px;
         }
         .sf-menu-btn:hover {
-          background: rgba(0, 0, 0, 0.05);
+          background: var(--accent-overlay);
         }
 
         /* Mobile panel */
         .sf-mobile-panel {
           display: none;
           flex-direction: column;
-          background: var(--cream);
+          /* Was var(--light-bg), which was never defined anywhere in the
+             design system — resolved to nothing, so the panel had no
+             background and inherited whatever sat behind it. Using the
+             surface token means it's always a real, theme-correct
+             background regardless of what's underneath. */
+          background: var(--surface);
           border-top: 1px solid var(--border-light);
           border-bottom: 1px solid var(--border-light);
           padding: 12px 16px 20px;
@@ -200,12 +209,12 @@ export default function StorefrontLayout() {
           padding: 14px 10px;
           font-size: 15px;
           font-weight: 500;
-          color: var(--forest-deep);
+          color: var(--text-heading);
           border-radius: var(--radius);
           text-decoration: none;
         }
         .sf-mobile-link:hover {
-          background: var(--parchment);
+          background: var(--bg-elevated);
         }
         .sf-mobile-auth {
           border-top: 1px solid var(--border-light);
@@ -265,7 +274,7 @@ export default function StorefrontLayout() {
           color: var(--on-dark);
         }
         .sf-footer-bottom {
-          border-top: 1px solid rgba(66, 133, 244, 0.2);
+          border-top: 1px solid var(--accent-overlay-strong);
           padding-top: var(--space-6);
           display: flex;
           justify-content: space-between;

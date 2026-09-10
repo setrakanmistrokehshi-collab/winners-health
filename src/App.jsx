@@ -9,6 +9,15 @@ import { Toaster } from 'react-hot-toast';
 import useAuthStore from '@/context/authStore';
 import { ROLES } from '@/constants/roles';
 
+// ─────────────────────────────────────────────
+// THEME INITIALIZATION (prevent flash on load)
+// ─────────────────────────────────────────────
+(() => {
+  const saved = localStorage.getItem('theme');
+  const isDark = saved ? saved === 'dark' : true;
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+})();
+
 // Layouts
 import StorefrontLayout from '@/components/layout/StorefrontLayout';
 import AdminLayout from '@/components/layout/AdminLayout';

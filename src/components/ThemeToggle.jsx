@@ -1,21 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Sun, Moon } from 'lucide-react';
 
 export default function ThemeToggle() {
-  const [dark, setDark] = useState(false);
-
-  // On first load: read saved preference. The storefront's design
-  // default is the dark shell (explicit product decision, not a
-  // dark-mode toggle default) — so unlike a typical prefers-color-
-  // scheme fallback, an OS set to light does NOT override this on a
-  // first visit. Only an explicit past choice (saved in localStorage)
-  // switches it to light.
-  useEffect(() => {
-  const saved = localStorage.getItem('theme');
-  const isDark = saved ? saved === 'dark' : true;   // same ternary as the working one
-  setDark(isDark);
-  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-}, []);
+  // Single source of truth: read the attribute main.jsx's IIFE already
+  // set on <html> before React mounted. No separate localStorage read
+  // here — two independent copies of "what's the current theme" logic
+  // is exactly what caused this bug in the first place.
+  const [dark, setDark] = useState(
+    () => document.documentElement.getAttribute('data-theme') !== 'light'
+  );
 
   const toggle = () => {
     const next = !dark;
@@ -23,10 +16,6 @@ export default function ThemeToggle() {
     document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
     localStorage.setItem('theme', next ? 'dark' : 'light');
   };
-  console.log(
-  document.documentElement.getAttribute('data-theme'),
-  document.documentElement.className
-);
 
   return (
     <button
@@ -40,8 +29,8 @@ export default function ThemeToggle() {
         width: 52,
         height: 28,
         borderRadius: 999,
-        border: '1px solid var(--border, #e2e2e2)',
-        background: dark ? '#20242e' : '#f4f1ea',
+        border: '1px solid var(--border)',
+        background: 'var(--bg-elevated)',
         cursor: 'pointer',
         padding: 0,
         flexShrink: 0,
@@ -56,7 +45,7 @@ export default function ThemeToggle() {
         aria-hidden="true"
         style={{
           position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)',
-          color: dark ? 'var(--muted, #6b7085)' : '#d99a2b',
+          color: dark ? 'var(--text-muted)' : 'var(--warning)',
           transition: 'color 0.2s ease',
         }}
       />
@@ -66,7 +55,7 @@ export default function ThemeToggle() {
         aria-hidden="true"
         style={{
           position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
-          color: dark ? '#cfd3e0' : 'var(--muted, #9a958c)',
+          color: dark ? 'var(--text)' : 'var(--text-muted)',
           transition: 'color 0.2s ease',
         }}
       />
@@ -80,7 +69,7 @@ export default function ThemeToggle() {
           width: 22,
           height: 22,
           borderRadius: '50%',
-          background: 'var(--surface, #fff)',
+          background: 'var(--surface)',
           boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
           display: 'flex',
           alignItems: 'center',
@@ -89,8 +78,8 @@ export default function ThemeToggle() {
         }}
       >
         {dark
-          ? <Moon size={12} strokeWidth={2} color="#cfd3e0" aria-hidden="true" />
-          : <Sun size={12} strokeWidth={2} color="#d99a2b" aria-hidden="true" />}
+          ? <Moon size={12} strokeWidth={2} color="var(--text)" aria-hidden="true" />
+          : <Sun size={12} strokeWidth={2} color="var(--warning)" aria-hidden="true" />}
       </span>
     </button>
   );

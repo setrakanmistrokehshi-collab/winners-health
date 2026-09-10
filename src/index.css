@@ -1,81 +1,61 @@
-/* VitaCore Design System — Organic Luxury Aesthetic */
+/* ════════════════════════════════════════════════════════════════
+   Design System
+   Dark is the default theme; [data-theme="light"] overrides below.
+   ════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Palette — dark blue-navy shell is now the storefront default
-     (previously cream/forest was default and dark mode was the
-     override; this flips that, per explicit design direction).
-     Existing variable NAMES are kept so the ~200 call sites across
-     the codebase that reference var(--forest)/var(--cream)/etc.
-     don't need to be rewritten — only what each name resolves to
-     has changed. */
-  --cream: #0d0f16;           /* page background */
-  --parchment: #171a24;       /* secondary section background */
-  --sage: #4285f4;            /* accent (was green, now blue) */
-  --sage-dark: #2f6fe0;
-  --sage-light: #7aa8f7;
-  --forest: #f4f6fb;          /* primary text / headings (was dark green, now near-white) */
-  --forest-deep: #ffffff;
-  --amber: #4285f4;           /* CTA buttons now share the blue accent */
-  --amber-light: #7aa8f7;
-  --rust: #e5534b;
-  --charcoal: #e7e9f0;        /* body text */
-  --muted: #8b90a3;           /* secondary/meta text */
+  /* ── Core semantic tokens (clear names — use these going forward) ── */
+  --bg: #0d0f16;              /* page background */
+  --bg-elevated: #171a24;     /* raised surfaces: dropdowns, mobile menu, subtle panels */
+  --surface: #1a1d2b;         /* cards, inputs, header-on-scroll */
+  --surface-2: #20232f;       /* secondary surface (nested cards) */
+  --text: #e7e9f0;            /* body text */
+  --text-heading: #ffffff;    /* headings, logo, emphasis text */
+  --text-muted: #8b90a3;      /* secondary/meta text */
   --border: #262a38;
   --border-light: #1f222e;
-  --white: #1a1d2b;           /* card background */
-  --card-2: #20232f;          /* nested/secondary card (e.g. Order Summary) */
-  --on-dark: #f4f6fb;         /* light text/content ALWAYS placed on a dark
-                                  surface regardless of theme — e.g. hero
-                                  overlay text, newsletter section text.
-                                  Distinct from --cream (page bg, flips with
-                                  theme) and --forest (body text, flips with
-                                  theme) — this one never flips because the
-                                  dark surface it sits on doesn't either. */
-  --deep-bg: #05070c;         /* the dark surface --on-dark pairs with —
-                                  footer, and anywhere else that should stay
-                                  visually dark regardless of theme. */
-  --error: #e5534b;
+
+  --accent: #4285f4;          /* brand blue — links, active states */
+  --accent-dark: #2f6fe0;     /* hover/pressed */
+  --accent-light: #7aa8f7;
+  --danger: #e5534b;
   --success: #34c77b;
   --warning: #e0a03e;
+  --on-dark: #f4f6fb;         /* text on always-dark surfaces (e.g. footer) */
+  --deep-bg: #05070c;         /* darkest surface (footer, deep panels) */
 
-  /* Light mode — the toggle's alternate state. Legibility parity
-     with the dark shell above: same hue relationships (blue accent,
-     near-black text on light card), just inverted lightness. */
-[data-theme="light"] {
-  --cream: #f5f6fa;
-  --parchment: #eceff5;
-  --sage: #2f6fe0;
-  --sage-dark: #1d4fb8;
-  --sage-light: #4285f4;
-  --forest: #12141c;
-  --forest-deep: #05070c;
-  --amber: #2f6fe0;
-  --amber-light: #4285f4;
-  --rust: #c0392b;
-  --charcoal: #1c1f29;
-  --muted: #656b7d;
-  --border: #e1e4ec;
-  --border-light: #ebeef4;
-  --white: #ffffff;
-  --card-2: #f5f6fa;
-  --on-dark: #f4f6fb;
-  --deep-bg: #05070c;
-  --error: #c0392b;
-  --success: #27ae60;
-  --warning: #c9791f;
-}
+  /* Theme-aware translucent overlays (replaces old hardcoded rgba() literals) */
+  --accent-overlay: rgba(66, 133, 244, 0.12);
+  --accent-overlay-strong: rgba(66, 133, 244, 0.2);
+  --success-overlay: rgba(52, 199, 123, 0.15);
+  --warning-overlay: rgba(224, 160, 62, 0.15);
+  --danger-overlay: rgba(229, 83, 75, 0.12);
+  --danger-overlay-focus: rgba(229, 83, 75, 0.15);
 
-  /* Admin palette (legacy — used directly by Categories/AdminOrders/
-     AdminUsers/AdminProducts/EditUserRole/AdminAnalytics; the newer
-     Admin.css .admin-shell system covers the rest of /admin). These
-     were dark-only with no theme override, which is why --admin-text
-     was unreadable: #02080e (near-black) text sitting on the
-     permanently-dark --admin-card (#22263a) background is only
-     legible if you assume dark mode always applies. Overriding both
-     values for [data-theme="light"] here, and correcting --admin-text
-     itself to a properly light color for the (default/only) dark
-     case, so text stays visible in both themes rather than only
-     working by accident in one. */
+  /* Header background when scrolled (was hardcoded light cream — now themed) */
+  --header-scrolled-bg: rgba(13, 15, 22, 0.92);
+
+  /* ── Legacy aliases — old variable names still resolve, pointed at the
+     tokens above, so nothing else in the codebase breaks. Migrate call
+     sites to the semantic names above whenever convenient. ── */
+  --cream: var(--bg);
+  --parchment: var(--bg-elevated);
+  --light-bg: var(--bg-elevated);   /* was UNDEFINED before — this caused the mobile-menu bug */
+  --sage: var(--accent);
+  --sage-dark: var(--accent-dark);
+  --sage-light: var(--accent-light);
+  --forest: var(--text-heading);
+  --forest-deep: var(--text-heading);
+  --amber: var(--accent);
+  --amber-light: var(--accent-light);
+  --rust: var(--danger);
+  --charcoal: var(--text);
+  --muted: var(--text-muted);
+  --white: var(--surface);
+  --card-2: var(--surface-2);
+  --error: var(--danger);
+
+  /* Admin palette (dark default) */
   --admin-bg: #0f1117;
   --admin-surface: #1a1d27;
   --admin-card: #22263a;
@@ -84,17 +64,6 @@
   --admin-muted: #8892a4;
   --admin-accent: #7a9e7e;
   --admin-amber: #c8854a;
-
-[data-theme="light"] {
-  --admin-bg: #f7f7f9;
-  --admin-surface: #ffffff;
-  --admin-card: #ffffff;
-  --admin-border: #e2e4eb;
-  --admin-text: #14161f;
-  --admin-muted: #6b7085;
-  --admin-accent: #4f7a54;
-  --admin-amber: #a8632f;
-}
 
   /* Typography */
   --font-display: 'Playfair Display', Georgia, serif;
@@ -124,11 +93,11 @@
   --radius-full: 9999px;
 
   /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(44,44,44,0.08);
-  --shadow: 0 4px 16px rgba(44,44,44,0.10);
-  --shadow-md: 0 8px 32px rgba(44,44,44,0.12);
-  --shadow-lg: 0 16px 48px rgba(44,44,44,0.16);
-  --shadow-amber: 0 8px 32px rgba(200,133,74,0.25);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.24);
+  --shadow: 0 4px 16px rgba(0,0,0,0.28);
+  --shadow-md: 0 8px 32px rgba(0,0,0,0.32);
+  --shadow-lg: 0 16px 48px rgba(0,0,0,0.4);
+  --shadow-amber: 0 8px 32px rgba(66,133,244,0.25);
 
   /* Transitions */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
@@ -136,6 +105,52 @@
   --duration-fast: 150ms;
   --duration: 250ms;
   --duration-slow: 400ms;
+}
+
+/* ── Light theme ─────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg: #f5f6fa;
+  --bg-elevated: #eceff5;
+  --surface: #ffffff;
+  --surface-2: #f5f6fa;
+  --text: #1c1f29;
+  --text-heading: #05070c;
+  --text-muted: #656b7d;
+  --border: #e1e4ec;
+  --border-light: #ebeef4;
+
+  --accent: #2f6fe0;
+  --accent-dark: #1d4fb8;
+  --accent-light: #4285f4;
+  --danger: #c0392b;
+  --success: #27ae60;
+  --warning: #c9791f;
+  --on-dark: #f4f6fb;
+  --deep-bg: #05070c;
+
+  --accent-overlay: rgba(47, 111, 224, 0.08);
+  --accent-overlay-strong: rgba(47, 111, 224, 0.16);
+  --success-overlay: rgba(39, 174, 96, 0.12);
+  --warning-overlay: rgba(201, 121, 31, 0.12);
+  --danger-overlay: rgba(192, 57, 43, 0.08);
+  --danger-overlay-focus: rgba(192, 57, 43, 0.1);
+
+  --header-scrolled-bg: rgba(248, 244, 238, 0.95);
+
+  --admin-bg: #f7f7f9;
+  --admin-surface: #ffffff;
+  --admin-card: #ffffff;
+  --admin-border: #e2e4eb;
+  --admin-text: #14161f;
+  --admin-muted: #6b7085;
+  --admin-accent: #4f7a54;
+  --admin-amber: #a8632f;
+
+  --shadow-sm: 0 1px 3px rgba(44,44,44,0.08);
+  --shadow: 0 4px 16px rgba(44,44,44,0.10);
+  --shadow-md: 0 8px 32px rgba(44,44,44,0.12);
+  --shadow-lg: 0 16px 48px rgba(44,44,44,0.16);
+  --shadow-amber: 0 8px 32px rgba(200,133,74,0.25);
 }
 
 /* ── Reset ───────────────────────────────────────────────────────── */
@@ -151,8 +166,8 @@ body {
   font-family: var(--font-body);
   font-size: 15px;
   line-height: 1.6;
-  color: var(--charcoal);
-  background: var(--cream);
+  color: var(--text);
+  background: var(--bg);
   min-height: 100vh;
 }
 
@@ -163,16 +178,16 @@ input, textarea, select { font-family: inherit; }
 
 /* ── Scrollbar ───────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--parchment); }
+::-webkit-scrollbar-track { background: var(--bg-elevated); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 /* ── Typography ──────────────────────────────────────────────────── */
 h1, h2, h3, h4, h5 {
   font-family: var(--font-display);
   font-weight: 700;
   line-height: 1.2;
-  color: var(--forest-deep);
+  color: var(--text-heading);
 }
 
 /* ── Utility classes ─────────────────────────────────────────────── */
@@ -226,7 +241,7 @@ h1, h2, h3, h4, h5 {
 
 /* ── Skeleton loader ─────────────────────────────────────────────── */
 .skeleton {
-  background: linear-gradient(90deg, var(--parchment) 25%, var(--border-light) 50%, var(--parchment) 75%);
+  background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--border-light) 50%, var(--bg-elevated) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius);
@@ -240,32 +255,32 @@ h1, h2, h3, h4, h5 {
   border-radius: var(--radius);
   font-size: 14px;
   font-family: var(--font-body);
-  color: var(--charcoal);
-  background: var(--white);
+  color: var(--text);
+  background: var(--surface);
   transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
   outline: none;
 }
 .input:focus {
-  border-color: var(--sage);
-  box-shadow: 0 0 0 3px rgba(122, 158, 126, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-overlay);
 }
 .input.error {
-  border-color: var(--error);
-  box-shadow: 0 0 0 3px rgba(192, 57, 43, 0.1);
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-overlay-focus);
 }
 
 .label {
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: var(--forest);
+  color: var(--text-heading);
   margin-bottom: var(--space-1);
   letter-spacing: 0.02em;
 }
 
 .field-error {
   font-size: 12px;
-  color: var(--error);
+  color: var(--danger);
   margin-top: var(--space-1);
 }
 
@@ -289,43 +304,43 @@ h1, h2, h3, h4, h5 {
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .btn-primary {
-  background: var(--sage-dark);
+  background: var(--accent-dark);
   color: #ffffff;
-  border-color: var(--sage-dark);
+  border-color: var(--accent-dark);
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--sage);
+  background: var(--accent);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
 .btn-primary:active { transform: translateY(0); }
 
 .btn-amber {
-  background: var(--amber);
-  color: var(--white);
-  border-color: var(--amber);
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
 }
 .btn-amber:hover:not(:disabled) {
-  background: var(--rust);
+  background: var(--danger);
   transform: translateY(-1px);
   box-shadow: var(--shadow-amber);
 }
 
 .btn-outline {
   background: transparent;
-  color: var(--forest);
+  color: var(--text-heading);
   border-color: var(--border);
 }
 .btn-outline:hover:not(:disabled) {
-  border-color: var(--sage);
-  background: rgba(122, 158, 126, 0.06);
+  border-color: var(--accent);
+  background: var(--accent-overlay);
 }
 
 .btn-ghost {
   background: transparent;
-  color: var(--muted);
+  color: var(--text-muted);
 }
-.btn-ghost:hover:not(:disabled) { color: var(--charcoal); background: var(--parchment); }
+.btn-ghost:hover:not(:disabled) { color: var(--text); background: var(--bg-elevated); }
 
 .btn-sm { padding: var(--space-2) var(--space-4); font-size: 13px; }
 .btn-lg { padding: var(--space-4) var(--space-8); font-size: 15px; }
@@ -333,7 +348,7 @@ h1, h2, h3, h4, h5 {
 
 /* ── Cards ───────────────────────────────────────────────────────── */
 .card {
-  background: var(--white);
+  background: var(--surface);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-light);
   box-shadow: var(--shadow-sm);
@@ -351,11 +366,11 @@ h1, h2, h3, h4, h5 {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.badge-green  { background: rgba(122,158,126,0.15); color: var(--sage-dark); }
-.badge-amber  { background: rgba(200,133,74,0.15);  color: var(--amber); }
-.badge-red    { background: rgba(192,57,43,0.12);   color: var(--rust); }
-.badge-gray   { background: var(--parchment);        color: var(--muted); }
-.badge-forest { background: var(--forest);           color: var(--cream); }
+.badge-green  { background: var(--success-overlay); color: var(--success); }
+.badge-amber  { background: var(--warning-overlay); color: var(--warning); }
+.badge-red    { background: var(--danger-overlay);  color: var(--danger); }
+.badge-gray   { background: var(--bg-elevated);      color: var(--text-muted); }
+.badge-forest { background: var(--text-heading);     color: var(--bg); }
 
 /* ── Divider ─────────────────────────────────────────────────────── */
 .divider {
@@ -416,6 +431,7 @@ h1, h2, h3, h4, h5 {
 
 .admin-content {
   padding: var(--space-8);
+}
 
 .charts-row   { display: grid; grid-template-columns: 1fr 340px; gap: var(--space-4); margin-bottom: var(--space-6); }
 .stats-strip  { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-bottom: var(--space-6); }
@@ -424,7 +440,7 @@ h1, h2, h3, h4, h5 {
 .kpi-grid     { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); }
 .table-wrap   { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .date-filter  { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-}
+
 .admin-card {
   background: var(--admin-card);
   border: 1px solid var(--admin-border);
@@ -468,14 +484,8 @@ h1, h2, h3, h4, h5 {
   border-bottom: 1px solid rgba(46,51,72,0.5);
   color: var(--admin-text);
 }
-.admin-table tbody tr:hover { background: rgba(122,158,126,0.04); }
+.admin-table tbody tr:hover { background: var(--accent-overlay); }
 .admin-table tbody tr:last-child td { border-bottom: none; }
-
-/* ── Pulse skeleton animation ────────────────────────────────────── */
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.4; }
-}
 
 /* ── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 768px) {
@@ -484,7 +494,7 @@ h1, h2, h3, h4, h5 {
   .admin-content { padding: var(--space-4); }
   .mobile-overlay { display: block !important; }
 
-.charts-row,
+  .charts-row,
   .bottom-row      { grid-template-columns: 1fr !important; }
   .kpi-grid        { grid-template-columns: 1fr 1fr !important; }
   .stats-strip     { grid-template-columns: 1fr !important; }
@@ -505,7 +515,6 @@ h1, h2, h3, h4, h5 {
 
 /* ════════════════════════════════════════════════════════════════
    MOBILE-ONLY STOREFRONT FIXES (≤768px)
-   Desktop styles are untouched — these rules only apply on phones.
    ════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
 
@@ -696,7 +705,6 @@ h1, h2, h3, h4, h5 {
 }
 
 /* Admin settings page */
-
 .settings-layout {
   display: grid;
   grid-template-columns: 200px 1fr;
@@ -721,7 +729,7 @@ h1, h2, h3, h4, h5 {
   color: var(--admin-text);
 }
 .settings-tab-item:hover:not(.active) { background: var(--admin-border); }
-.settings-tab-item.active { background: var(--admin-accent); color: white; }
+.settings-tab-item.active { background: var(--admin-accent); color: #ffffff; }
 
 .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-grid-1 { display: grid; gap: 12px; }

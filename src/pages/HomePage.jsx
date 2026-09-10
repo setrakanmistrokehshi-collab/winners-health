@@ -268,25 +268,24 @@ export default function HomePage() {
       
 
       {/* ── Newsletter ────────────────────────────────────────────── */}
-      <section className='section-pad' style={{ padding: 'var(--space-20) 0', background: 'var(--parchment)' }}>
-        <div className='container' style={{ textAlign: 'center', maxWidth: 600, margin: '0 auto' }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, color: 'var(--on-dark)', marginBottom: 12 }}>
-            Join 5,000+ Wellness Subscribers
-          </h2>
-          <p style={{ color: 'var(--sage-light)', marginBottom: 'var(--space-6)', lineHeight: 1.7 }}>
-            Get exclusive deals, new product launches, and wellness tips delivered weekly.
-          </p>
-          <div className='newsletter-form' style={{ display: 'flex', gap: 'var(--space-3)', maxWidth: 440, margin: '0 auto' }}>
-            <input
-              type='email'
-              placeholder='your@email.com'
-              className='input'
-              style={{ background: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.2)', color: 'var(--on-dark)' }}
-            />
-            <button className='btn btn-amber'>Subscribe</button>
-          </div>
-        </div>
-      </section>
+      <section className='section-pad' style={{ padding: 'var(--space-20) 0', background: 'var(--bg-elevated)' }}>
+  <div className='container' style={{ textAlign: 'center', maxWidth: 600, margin: '0 auto' }}>
+    <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 32, color: 'var(--text-heading)', marginBottom: 12 }}>
+      Join 5,000+ Wellness Subscribers
+    </h2>
+    <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-6)', lineHeight: 1.7 }}>
+      Get exclusive deals, new product launches, and wellness tips delivered weekly.
+    </p>
+    <div className='newsletter-form' style={{ display: 'flex', gap: 'var(--space-3)', maxWidth: 440, margin: '0 auto' }}>
+      <input
+        type='email'
+        placeholder='your@email.com'
+        className='input'
+      />
+      <button className='btn btn-amber'>Subscribe</button>
+    </div>
+  </div>
+</section>
     </div>
   );
 }
