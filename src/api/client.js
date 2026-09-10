@@ -316,12 +316,19 @@ export const users = {
 // ADMIN  /admin
 // ═══════════════════════════════════════════════════════════════════
 export const admin = {
-  // Dashboard
-  dashboard: () => api.get('/admin/stats'),
-  revenueAnalytics: (months) => api.get('/admin/reports/revenue', { params: { months } }),
-  topProducts: () => api.get('/admin/reports/top-products'),
-  categoryAnalytics: () => api.get('/admin/stats/categoryBreakdown'),
-  
+  // Dashboard — pass period so the UI filter works
+  dashboard: (period = '7d') =>
+    api.get('/admin/stats', { params: { period } }),
+
+  revenueAnalytics: (months) =>
+    api.get('/admin/reports/revenue', { params: { months } }),
+
+  topProducts: (limit = 10) =>
+    api.get('/admin/reports/top-products', { params: { limit } }),
+
+  categoryAnalytics: () =>
+    api.get('/admin/stats/categoryBreakdown'),
+
   // Users
   allUsers: (params) => api.get('/admin/users', { params }),
   toggleUserStatus: (id) => api.patch(`/admin/users/${id}/status`),

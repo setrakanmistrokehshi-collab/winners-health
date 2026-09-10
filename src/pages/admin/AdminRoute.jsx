@@ -8,7 +8,7 @@ export default function AdminRoute({ children }) {
   // Adjust this to match your actual auth store/context.
   // If you use Zustand: import { useAuthStore } from '../../stores/authStore'
   // If you use Context: import { useAuth } from '../../context/AuthContext'
-  const token = tokenStore.getItem('vc_access');
+  const token = useAuthStore.getItem('vc_access');
   let user = null;
 
   try {
