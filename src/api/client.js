@@ -329,6 +329,11 @@ export const admin = {
   categoryAnalytics: () =>
     api.get('/admin/stats/categoryBreakdown'),
 
+
+  // Notifications (optional — return [] if backend not ready)
+notifications: (params) => api.get('/admin/notifications', { params }),
+markNotificationsRead: () => api.patch('/admin/notifications/read-all'),
+
   // Users
   allUsers: (params) => api.get('/admin/users', { params }),
   toggleUserStatus: (id) => api.patch(`/admin/users/${id}/status`),

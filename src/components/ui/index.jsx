@@ -5,8 +5,7 @@ import { users as usersApi } from '@/api/client';
 import useAuthStore from '@/context/authStore';
 import toast from 'react-hot-toast';
 import {
-  Box, Heart, Check, ChevronLeft, ChevronRight, X,
-  TrendingUp, TrendingDown, Leaf, ShoppingCart,
+  Box, Heart, Check, ChevronLeft, ChevronRight, Leaf, ShoppingCart,
 } from 'lucide-react';
 import { trackAddToCart, generateEventId } from '@/lib/metaPixel';
 import PriceTag from '@/components/PriceTag';

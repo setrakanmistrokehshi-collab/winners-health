@@ -377,6 +377,7 @@ export default function StorefrontLayout() {
 
           {/* Desktop nav */}
           <nav className="sf-nav">
+            <NavLink to="/">Home</NavLink>
             <NavLink to="/products">Shop</NavLink>
             {isAuthenticated && <NavLink to="/orders">Orders</NavLink>}
             {isAuthenticated && <NavLink to="/wishlist">Wishlist</NavLink>}

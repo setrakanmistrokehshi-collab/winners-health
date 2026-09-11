@@ -40,7 +40,7 @@ export default function HomePage() {
      <section className='hero-section' style={{
   background: `
     linear-gradient(135deg, rgba(6, 10, 22, 0.88) 0%, rgba(8, 14, 30, 0.55) 50%, rgba(4, 7, 16, 0.75) 100%),
-    url('https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1920&q=80')
+    url('https://images.unsplash.com/photo-1610832958506-aa56368176cf?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')
   `,
   backgroundSize: 'cover',
   backgroundPosition: 'center',
@@ -54,7 +54,7 @@ export default function HomePage() {
         <div className='hero-orb-1' style={{
           position: 'absolute', top: '15%', right: '8%',
           width: 400, height: 400, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(66, 133, 244, 0.28) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(33, 60, 90, 0.28) 0%, transparent 70%)',
           pointerEvents: 'none',
         }} />
         <div className='hero-orb-2' style={{
@@ -84,21 +84,21 @@ export default function HomePage() {
               letterSpacing: '-0.02em', marginBottom: 'var(--space-6)',
               animationDelay: '80ms',
             }}>
-              Nourish Your Body.<br />
-              <em style={{ color: 'var(--amber-light)', fontStyle: 'italic' }}>Elevate</em> Your Life.
+              Nourish Your Body Naturally.<br />
+             <em style={{ color: 'var(--amber-light)', fontStyle: 'italic' }}>Elevate</em> Your Life.
             </h1>
 
-            <p className='animate-fade-up' style={{
-              fontSize: 18, color: 'rgba(248,244,238,0.75)',
-              lineHeight: 1.7, maxWidth: 520, marginBottom: 'var(--space-8)',
-              animationDelay: '160ms',
-            }}>
-              Science-backed supplements formulated for healthy lifestyles.
-              Premium quality, transparent ingredients, measurable results.
-            </p>
+             <p className='animate-fade-up' style={{
+             fontSize: 18, color: 'rgba(248,244,238,0.75)',
+             lineHeight: 1.7, maxWidth: 520, marginBottom: 'var(--space-8)',
+             animationDelay: '160ms',
+}}>
+            Clean, plant-powered supplements crafted for those who believe in nature.
+            Transparent sourcing. No unnecessary additives. Results you can feel.
+</p>
 
             <div className='hero-cta animate-fade-up' style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', animationDelay: '240ms' }}>
-              <Link to='/products' className='btn btn-amber btn-lg'>
+              <Link to='/products' className='btn btn-primary btn-lg'>
                 Shop Now
               </Link>
               <Link to='/products?featured=true' className='btn btn-lg' style={{
@@ -282,7 +282,7 @@ export default function HomePage() {
         placeholder='your@email.com'
         className='input'
       />
-      <button className='btn btn-amber'>Subscribe</button>
+      <button className='btn btn-primary'>Subscribe</button>
     </div>
   </div>
 </section>
