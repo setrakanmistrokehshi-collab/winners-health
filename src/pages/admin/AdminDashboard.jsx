@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AreaChart, Area, PieChart, Pie, Cell,
+  AreaChart, Area, PieChart, Pie,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { admin, orders as ordersApi } from '../../api/client';
@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 const PERIOD_MAP = {
-  Today: '1d',
+  Today: 'today',
   '7 Days': '7d',
   '30 Days': '30d',
   '90 Days': '90d',
@@ -131,6 +131,11 @@ export default function AdminDashboard() {
   const catData = stats?.categoryBreakdown ?? stats?.categories ?? [];
   const topProds = stats?.topProducts ?? [];
   const inventory = stats?.inventory ?? stats?.lowStock ?? [];
+
+  const pieData = catData.map((entry, i) => ({
+    ...entry,
+    fill: entry.color || COLORS[i % COLORS.length],
+  }));
 
   const today = new Date().toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -292,25 +297,23 @@ export default function AdminDashboard() {
           </div>
           {catData.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={160}>
-                <PieChart>
-                  <Pie
-                    data={catData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={45}
-                    outerRadius={72}
-                    dataKey="value"
-                    nameKey="name"
-                    paddingAngle={3}
-                  >
-                    {catData.map((entry, i) => (
-                      <Cell key={i} fill={entry.color || COLORS[i % COLORS.length]} stroke="transparent" />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v, n) => [`${v}%`, n]} />
-                </PieChart>
-              </ResponsiveContainer>
+            <ResponsiveContainer width="100%" height={160}>
+        <PieChart>
+    <Pie
+      data={pieData}
+      cx="50%"
+      cy="50%"
+      innerRadius={45}
+      outerRadius={72}
+      dataKey="value"
+      nameKey="name"
+      paddingAngle={3}
+      stroke="transparent"
+    />
+    <Tooltip formatter={(v, n) => [`${v}%`, n]} />
+  </PieChart>
+</ResponsiveContainer>
+              
               <div style={{ marginTop: 8 }}>
                 {catData.map((c, i) => (
                   <div
@@ -405,12 +408,7 @@ export default function AdminDashboard() {
                           color: o.status === 'cancelled' ? 'var(--admin-muted)' : 'var(--admin-accent)',
                         }}
                       >
-                        {/* Order.total is stored in integer KOBO (see
-                            models/Order.js) — divide by 100 for display.
-                            .totalPrice kept only as a fallback for any older
-                            record written before the field was standardized;
-                            it was never populated, so it's effectively dead,
-                            but harmless to leave as a fallback. */}
+                       
                         ₦{(Number(o.total ?? o.totalPrice ?? 0) / 100).toLocaleString()}
                       </td>
                     </tr>

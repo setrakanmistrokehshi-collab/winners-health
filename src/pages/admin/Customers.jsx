@@ -219,7 +219,14 @@ export default function Customers() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 16 }}>
+     <div
+  style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
+    gap: 16,
+    alignItems: 'start',
+  }}
+>
         <div className="card">
           <div className="card-header">
             <div className="card-title">All Customers ({formatCount(total)})</div>
