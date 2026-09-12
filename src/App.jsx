@@ -59,6 +59,7 @@ import Reviews from '@/pages/admin/Reviews';
 import Categories from '@/pages/admin/Categories';
 import EditUserRole from '@/pages/admin/EditUserRole';
 import Settings from '@/pages/admin/Settings';
+import AdminCurrencies from '@/pages/admin/AdminCurrencies';
 
 products.list({ page: 1, limit: 12 }).catch(() => {});
 products.list({ page: 1, limit: 12, featured: true }).catch(() => {});
@@ -205,6 +206,7 @@ const router = createBrowserRouter([
           { path: 'reviews', element: <Reviews /> },
           { path: 'categories', element: <Categories /> },
           { path: 'settings', element: <Settings /> },
+          { path: 'currencies', element: <AdminCurrencies /> },
         ],
       },
     ],

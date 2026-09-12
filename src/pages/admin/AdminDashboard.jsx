@@ -17,6 +17,8 @@ const PERIOD_MAP = {
   '90 Days': '90d',
 };
 
+const COLORS = ['#00c896', '#7c5cfc', '#f59e0b', '#ff4d6d', '#7a9e7e', '#c8854a'];
+
 const nairaTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -58,50 +60,42 @@ function cap(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 }
 
+// api/client.js's response shape is inconsistent across endpoints —
+// some handlers return the raw axios response, some pre-unwrap with
+// .then(r => r.data). This cascade handles both without guessing
+// which one a given call returns.
+function unwrapEnvelope(res, fallback) {
+  return res?.data?.data ?? res?.data ?? res ?? fallback;
+}
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [period, setPeriod] = useState('7 Days');
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const periodParam = PERIOD_MAP[period] || '7d';
 
-      // Support either client shape: admin.dashboard(period) or admin.getDashboardStats(period)
-      const statsPromise =
-        typeof admin.dashboard === 'function'
-          ? admin.dashboard(periodParam)
-          : typeof admin.getDashboardStats === 'function'
-            ? admin.getDashboardStats(periodParam)
-            : Promise.reject(new Error('admin.dashboard not found on API client'));
+      const [statsRes, ordersRes] = await Promise.all([
+        admin.dashboard(periodParam),
+        ordersApi.all({ limit: 10, sort: '-createdAt' }),
+      ]);
 
-      const ordersPromise =
-        typeof ordersApi.getAll === 'function'
-          ? ordersApi.getAll({ limit: 10, sort: '-createdAt' })
-          : typeof ordersApi.adminAll === 'function'
-            ? ordersApi.adminAll({ limit: 10 })
-            : typeof admin.getRecentOrders === 'function'
-              ? admin.getRecentOrders(10)
-              : Promise.resolve({ data: { orders: [] } });
-
-      const [statsRes, ordersRes] = await Promise.all([statsPromise, ordersPromise]);
-
-      // Normalize common response envelopes: { data: {...} } | { data: { data: {...} } } | plain object
-      const rawStats = statsRes?.data?.data ?? statsRes?.data ?? statsRes ?? {};
-      const rawOrders =
-        ordersRes?.data?.orders ??
-        ordersRes?.data?.data ??
-        ordersRes?.orders ??
-        ordersRes?.data ??
-        [];
+      const rawStats = unwrapEnvelope(statsRes, {});
+      const rawOrders = unwrapEnvelope(ordersRes, {})?.orders
+        ?? unwrapEnvelope(ordersRes, []);
 
       setStats(rawStats);
       setOrders(Array.isArray(rawOrders) ? rawOrders : []);
     } catch (err) {
       console.error('Dashboard load failed:', err);
+      setError(err?.response?.data?.message || err?.message || 'Failed to load dashboard');
       setStats(null);
       setOrders([]);
     } finally {
@@ -113,7 +107,8 @@ export default function AdminDashboard() {
     load();
   }, [load]);
 
-  // Normalized KPI fields — support multiple backend shapes
+  // Normalized KPI fields — support multiple backend response shapes
+  // without silently defaulting live numbers to zero
   const revenue = stats?.revenue ?? stats?.totalRevenue ?? 0;
   const revenueDelta = stats?.revenueDelta ?? stats?.revenue?.delta ?? null;
   const revenueUp = stats?.revenueUp ?? stats?.revenue?.up ?? true;
@@ -149,6 +144,19 @@ export default function AdminDashboard() {
     );
   }
 
+  if (error) {
+    return (
+      <div style={{ color: 'var(--error)', padding: 40, textAlign: 'center' }}>
+        {error}
+        <div style={{ marginTop: 12 }}>
+          <button className="btn btn-outline btn-sm" onClick={load} type="button">
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="page-header">
@@ -162,6 +170,7 @@ export default function AdminDashboard() {
               key={p}
               className={`filter-btn ${period === p ? 'active' : ''}`}
               onClick={() => setPeriod(p)}
+              type="button"
             >
               {p}
             </button>
@@ -396,7 +405,13 @@ export default function AdminDashboard() {
                           color: o.status === 'cancelled' ? 'var(--admin-muted)' : 'var(--admin-accent)',
                         }}
                       >
-                        ₦{Number(o.totalPrice ?? o.total ?? 0).toLocaleString()}
+                        {/* Order.total is stored in integer KOBO (see
+                            models/Order.js) — divide by 100 for display.
+                            .totalPrice kept only as a fallback for any older
+                            record written before the field was standardized;
+                            it was never populated, so it's effectively dead,
+                            but harmless to leave as a fallback. */}
+                        ₦{(Number(o.total ?? o.totalPrice ?? 0) / 100).toLocaleString()}
                       </td>
                     </tr>
                   ))}
@@ -558,8 +573,6 @@ export default function AdminDashboard() {
     </>
   );
 }
-
-const COLORS = ['#00c896', '#7c5cfc', '#f59e0b', '#ff4d6d', '#7a9e7e', '#c8854a'];
 
 function Empty({ children }) {
   return (

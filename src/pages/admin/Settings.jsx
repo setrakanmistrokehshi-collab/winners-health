@@ -13,81 +13,64 @@ const TABS = [
   { id: 'security',      Icon: Lock,       label: 'Security'      },
 ];
 
-// Shipping zones with default values
-const SHIPPING_ZONES = [
-  { id: 'lagos_within', label: 'Lagos (within)', default: 1500 },
-  { id: 'lagos_outside', label: 'Lagos (outside island)', default: 2000 },
-  { id: 'south_west', label: 'South-West Nigeria', default: 2500 },
-  { id: 'south_east', label: 'South-East / South-South', default: 3000 },
-  { id: 'north', label: 'North Nigeria', default: 3500 },
-  { id: 'express', label: 'Express (same day)', default: 5000 },
-  { id: 'owerri_within', label: 'Owerri (within)', default: 3000 },
-  { id: 'owerri_outside', label: 'Owerri (outside)', default: 3500 },
-  { id: 'ph_within', label: 'Port-Harcourt (within)', default: 2500 },
-  { id: 'ph_outside', label: 'Port-Harcourt (outside)', default: 3000 },
-];
-
-// Notification settings
+// Labels only. `id` matches the actual notification key defined in
+// models/Settings.js (notifications.lowStock, notifications.newOrder,
+// etc.), not an arbitrary frontend-invented name.
 const NOTIFICATIONS = [
-  { id: 'low_stock', label: 'Low stock alerts' },
-  { id: 'new_order', label: 'New order placed' },
-  { id: 'order_status', label: 'Order status update' },
-  { id: 'new_customer', label: 'New customer signup' },
-  { id: 'payment', label: 'Payment received' },
-  { id: 'review', label: 'Review submitted' },
+  { id: 'lowStock',    label: 'Low stock alerts'    },
+  { id: 'newOrder',    label: 'New order placed'    },
+  { id: 'orderStatus', label: 'Order status update' },
+  { id: 'newCustomer', label: 'New customer signup' },
+  { id: 'payment',     label: 'Payment received'    },
+  { id: 'review',      label: 'Review submitted'    },
 ];
 
-// Security settings
+// Security settings aren't in models/Settings.js yet — kept as
+// labels-only UI state until a backend field exists to persist them.
+// See the note rendered in the Security tab below.
 const SECURITY_SETTINGS = [
-  { id: '2fa', label: 'Two-factor authentication' },
-  { id: 'login_alert', label: 'Login email alerts' },
-  { id: 'force_https', label: 'Force HTTPS' },
+  { id: '2fa',         label: 'Two-factor authentication' },
+  { id: 'login_alert', label: 'Login email alerts'        },
+  { id: 'force_https', label: 'Force HTTPS'               },
 ];
+
+// Empty shape matching models/Settings.js exactly — no sample/demo
+// values. Every field starts blank/zero and is populated only from
+// what loadSettings() actually receives from the backend.
+const EMPTY_FORM = {
+  store: {
+    name: '', email: '', phone: '', address: '', currency: '', nafdac: '', cac: '',
+  },
+  payments: {
+    nombaPublicKey: '', webhookSecret: '',
+  },
+  shipping: {
+    zones: [], // [{ name, price }, ...] — shape and content come entirely from the backend
+  },
+  notifications: {
+    lowStockThreshold: 0,
+    lowStock: false, newOrder: false, orderStatus: false,
+    newCustomer: false, payment: false, review: false,
+  },
+  email: {
+    smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '',
+  },
+  security: {},
+
+  // Password-change fields aren't part of the Settings document —
+  // kept separate so they never get sent in the settings save payload.
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+};
 
 export default function Settings() {
   const [tab, setTab] = useState('store');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [changingPassword, setChangingPassword] = useState(false);
-  
-  // Form state
-  const [form, setForm] = useState({
-    // Store
-    storeName: 'Winners Health',
-    storeEmail: 'admin@winnershealth.ng',
-    storePhone: '+234 800 000 0000',
-    storeAddress: 'Lagos, Nigeria',
-    currency: 'NGN (₦)',
-    nafdac: '',
-    cac: '',
-    
-    // Payments
-    nombaKey: '',
-    webhookSecret: '',
-    
-    // Email
-    smtpHost: '',
-    smtpPort: '587',
-    smtpUser: '',
-    smtpPass: '',
-    
-    // Notifications
-    lowStockThreshold: '30',
-    notifications: {},
-    
-    // Security
-    security: {},
-    
-    // Shipping
-    shipping: {},
-    
-    // Password change
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
+  const [form, setForm] = useState(EMPTY_FORM);
 
-  // Load settings on mount
   useEffect(() => {
     loadSettings();
   }, []);
@@ -96,15 +79,18 @@ export default function Settings() {
     setLoading(true);
     try {
       const { data } = await api.get('/admin/settings');
-      if (data) {
-        setForm(prev => ({
-          ...prev,
-          ...data,
-          notifications: data.notifications || {},
-          security: data.security || {},
-          shipping: data.shipping || {},
-        }));
-      }
+      // Controller wraps as { success, data: {...} }
+      const settings = data?.data ?? data ?? {};
+
+      setForm(prev => ({
+        ...prev,
+        store:         { ...prev.store,         ...settings.store },
+        payments:      { ...prev.payments,      ...settings.payments },
+        shipping:      { ...prev.shipping,      zones: settings.shipping?.zones ?? [] },
+        notifications: { ...prev.notifications, ...settings.notifications },
+        email:         { ...prev.email,         ...settings.email },
+        // security has no backend field yet — leave as-is
+      }));
     } catch (err) {
       console.error('Failed to load settings:', err);
       toast.error('Failed to load settings');
@@ -113,37 +99,76 @@ export default function Settings() {
     }
   }
 
-  function updateForm(key, value) {
-    setForm(prev => ({ ...prev, [key]: value }));
+  function updateStore(key, value) {
+    setForm(prev => ({ ...prev, store: { ...prev.store, [key]: value } }));
   }
 
-  function updateNested(parent, key, value) {
+  function updatePayments(key, value) {
+    setForm(prev => ({ ...prev, payments: { ...prev.payments, [key]: value } }));
+  }
+
+  function updateEmail(key, value) {
+    setForm(prev => ({ ...prev, email: { ...prev.email, [key]: value } }));
+  }
+
+  function updateNotification(key, value) {
+    setForm(prev => ({ ...prev, notifications: { ...prev.notifications, [key]: value } }));
+  }
+
+  function updateSecurity(key, value) {
+    setForm(prev => ({ ...prev, security: { ...prev.security, [key]: value } }));
+  }
+
+  function updateZonePrice(zoneName, price) {
     setForm(prev => ({
       ...prev,
-      [parent]: { ...prev[parent], [key]: value }
+      shipping: {
+        ...prev.shipping,
+        zones: prev.shipping.zones.map(z =>
+          z.name === zoneName ? { ...z, price } : z
+        ),
+      },
     }));
   }
 
-  function updatePassword(key, value) {
+  function updatePasswordField(key, value) {
     setForm(prev => ({ ...prev, [key]: value }));
   }
 
   async function saveSettings() {
-    // Validate required fields
-    if (!form.storeName.trim()) {
+    if (!form.store.name.trim()) {
       toast.error('Store name is required');
       return;
     }
-    
-    if (!form.storeEmail.trim() || !form.storeEmail.includes('@')) {
+    if (!form.store.email.trim() || !form.store.email.includes('@')) {
       toast.error('Valid store email is required');
       return;
     }
 
     setSaving(true);
     try {
-      await api.put('/admin/settings', form);
+      // Send only the settings-document shape the backend validates
+      // (store/payments/shipping/notifications/email) — never the
+      // password-change fields, which live in the same form state
+      // but belong to a different endpoint entirely.
+      await api.post('/admin/settings', {
+        store: form.store,
+        payments: form.payments,
+        shipping: { zones: form.shipping.zones },
+        notifications: form.notifications,
+        email: {
+          smtpHost: form.email.smtpHost,
+          smtpPort: form.email.smtpPort,
+          smtpUser: form.email.smtpUser,
+          // smtpPass intentionally omitted — backend stores it in
+          // env/secrets manager, never accepts it over this endpoint
+        },
+      });
       toast.success('Settings saved successfully!');
+      // Payment keys come back masked after save (backend never
+      // echoes real secrets) — reload so the form reflects that
+      // rather than showing the plaintext value just typed.
+      await loadSettings();
     } catch (err) {
       console.error('Failed to save settings:', err);
       toast.error(err.response?.data?.message || 'Failed to save settings');
@@ -152,63 +177,48 @@ export default function Settings() {
     }
   }
 
-  // ── CHANGE PASSWORD FUNCTION ─────────────────────────────────────
   async function changePassword() {
     const { currentPassword, newPassword, confirmPassword } = form;
-    
-    // Validation
+
     if (!currentPassword || currentPassword.length < 1) {
       toast.error('Please enter your current password');
       return;
     }
-    
     if (!newPassword || newPassword.length < 8) {
       toast.error('New password must be at least 8 characters');
       return;
     }
-    
-    // Check for password strength
     const hasLetter = /[a-zA-Z]/.test(newPassword);
     const hasNumber = /[0-9]/.test(newPassword);
     if (!hasLetter || !hasNumber) {
       toast.error('Password must contain at least one letter and one number');
       return;
     }
-    
     if (newPassword !== confirmPassword) {
       toast.error('New passwords do not match');
       return;
     }
-    
     if (newPassword === currentPassword) {
       toast.error('New password must be different from your current password');
       return;
     }
-    
+
     setChangingPassword(true);
     try {
-      // Call your backend password change endpoint
-      await api.put('/admin/settings/password', {
-        currentPassword,
-        newPassword,
-      });
-      
+      await api.put('/admin/settings/password', { currentPassword, newPassword });
+
       toast.success('Password changed successfully! You will be logged out shortly.');
-      
-      // Clear password fields
+
       setForm(prev => ({
         ...prev,
         currentPassword: '',
         newPassword: '',
         confirmPassword: '',
       }));
-      
-      // Optional: Logout user after password change (since tokenVersion is incremented)
+
       setTimeout(() => {
-        // Redirect to login or logout
         window.location.href = '/admin-login?passwordChanged=true';
       }, 2000);
-      
     } catch (err) {
       const message = err.response?.data?.message || 'Failed to change password';
       toast.error(message);
@@ -219,9 +229,7 @@ export default function Settings() {
 
   async function sendTestEmail() {
     try {
-      await api.post('/admin/settings/test-email', {
-        email: form.storeEmail,
-      });
+      await api.post('/admin/settings/test-email', { email: form.store.email });
       toast.success('Test email sent successfully!');
     } catch (err) {
       toast.error('Failed to send test email');
@@ -230,11 +238,11 @@ export default function Settings() {
 
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '400px' 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '400px',
       }}>
         <div>Loading settings...</div>
       </div>
@@ -250,32 +258,30 @@ export default function Settings() {
             Configure your store preferences
           </p>
         </div>
-        <button 
-          className="btn btn-primary" 
-          onClick={saveSettings} 
+        <button
+          className="btn btn-primary"
+          onClick={saveSettings}
           disabled={saving}
+          type="button"
         >
           {saving ? 'Saving…' : 'Save Changes'}
         </button>
       </div>
 
       <div className="settings-layout">
-        {/* Tab nav */}
-        <div className="card settings-tabs" style={{ padding:8 }}>
-
+        <div className="card settings-tabs" style={{ padding: 8 }}>
           {TABS.map(t => (
-           <div
-  key={t.id}
-  className={`nav-item settings-tab-item ${tab === t.id ? 'active' : ''}`}
-  onClick={() => setTab(t.id)}
-  style={{ display: 'flex', alignItems: 'center', gap: 8 }}
->
-  <t.Icon size={16} strokeWidth={1.8} aria-hidden="true" /> {t.label}
-</div>
+            <div
+              key={t.id}
+              className={`nav-item settings-tab-item ${tab === t.id ? 'active' : ''}`}
+              onClick={() => setTab(t.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              <t.Icon size={16} strokeWidth={1.8} aria-hidden="true" /> {t.label}
+            </div>
           ))}
         </div>
 
-        {/* Tab content */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           {/* Store Tab */}
@@ -284,55 +290,55 @@ export default function Settings() {
               <div className="card">
                 <div className="card-title" style={{ marginBottom: 16 }}>Store Information</div>
                 <div className="form-grid-2">
-                  <FormField 
-                    label="Store Name" 
-                    value={form.storeName} 
-                    onChange={v => updateForm('storeName', v)} 
-                    placeholder="Winners Health"
+                  <FormField
+                    label="Store Name"
+                    value={form.store.name}
+                    onChange={v => updateStore('name', v)}
+                    placeholder="Your store name"
                     required
                   />
-                  <FormField 
-                    label="Store Email" 
-                    value={form.storeEmail} 
-                    onChange={v => updateForm('storeEmail', v)} 
-                    type="email" 
-                    placeholder="admin@winnershealth.ng"
+                  <FormField
+                    label="Store Email"
+                    value={form.store.email}
+                    onChange={v => updateStore('email', v)}
+                    type="email"
+                    placeholder="admin@yourstore.ng"
                     required
                   />
-                  <FormField 
-                    label="Support Phone" 
-                    value={form.storePhone} 
-                    onChange={v => updateForm('storePhone', v)} 
+                  <FormField
+                    label="Support Phone"
+                    value={form.store.phone}
+                    onChange={v => updateStore('phone', v)}
                     placeholder="+234 800 000 0000"
                   />
-                  <FormField 
-                    label="Store Address" 
-                    value={form.storeAddress} 
-                    onChange={v => updateForm('storeAddress', v)} 
-                    placeholder="Lagos, Nigeria"
+                  <FormField
+                    label="Store Address"
+                    value={form.store.address}
+                    onChange={v => updateStore('address', v)}
+                    placeholder="City, Country"
                   />
-                  <FormField 
-                    label="Currency" 
-                    value={form.currency} 
-                    onChange={v => updateForm('currency', v)} 
-                    placeholder="NGN (₦)"
+                  <FormField
+                    label="Currency"
+                    value={form.store.currency}
+                    onChange={v => updateStore('currency', v)}
+                    placeholder="NGN"
                   />
                 </div>
               </div>
-              
+
               <div className="card">
                 <div className="card-title" style={{ marginBottom: 16 }}>NAFDAC & Compliance</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <FormField 
-                    label="NAFDAC Number" 
-                    value={form.nafdac} 
-                    onChange={v => updateForm('nafdac', v)} 
+                  <FormField
+                    label="NAFDAC Number"
+                    value={form.store.nafdac}
+                    onChange={v => updateStore('nafdac', v)}
                     placeholder="NAFDAC/FD-001"
                   />
-                  <FormField 
-                    label="CAC Business Number" 
-                    value={form.cac} 
-                    onChange={v => updateForm('cac', v)} 
+                  <FormField
+                    label="CAC Business Number"
+                    value={form.store.cac}
+                    onChange={v => updateStore('cac', v)}
                     placeholder="RC-1234567"
                   />
                 </div>
@@ -344,47 +350,48 @@ export default function Settings() {
           {tab === 'payments' && (
             <div className="card">
               <div className="card-title" style={{ marginBottom: 16 }}>Nomba Payment Gateway</div>
-              <div style={{ 
-                padding: '12px 16px', 
-                background: 'rgba(0,200,150,.06)', 
-                border: '1px solid rgba(0,200,150,.2)', 
-                borderRadius: 8, 
-                marginBottom: 16, 
-                fontSize: 13, 
-                color: 'var(--muted)' 
+              <div style={{
+                padding: '12px 16px',
+                background: 'rgba(0,200,150,.06)',
+                border: '1px solid rgba(0,200,150,.2)',
+                borderRadius: 8,
+                marginBottom: 16,
+                fontSize: 13,
+                color: 'var(--muted)',
               }}>
-                ℹ️ Your backend already handles Nomba webhook verification via HMAC-SHA512. 
-                Enter keys from your Nomba dashboard.
+                ℹ️ Your backend already handles Nomba webhook verification via HMAC-SHA512.
+                Enter keys from your Nomba dashboard. Saved keys are masked as *** on reload —
+                re-enter a value only if you're changing it.
               </div>
-              
-              <FormField 
-                label="Nomba Public Key" 
-                value={form.nombaKey} 
-                onChange={v => updateForm('nombaKey', v)} 
-                placeholder="pk_live_…" 
+
+              <FormField
+                label="Nomba Public Key"
+                value={form.payments.nombaPublicKey}
+                onChange={v => updatePayments('nombaPublicKey', v)}
+                placeholder="pk_live_…"
                 type="password"
               />
-              
-              <FormField 
-                label="Webhook Secret" 
-                value={form.webhookSecret} 
-                onChange={v => updateForm('webhookSecret', v)} 
-                placeholder="whsec_…" 
+
+              <FormField
+                label="Webhook Secret"
+                value={form.payments.webhookSecret}
+                onChange={v => updatePayments('webhookSecret', v)}
+                placeholder="whsec_…"
                 type="password"
               />
-              
+
               <div style={{ marginTop: 12 }}>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>
                   Webhook URL (copy this to your Nomba dashboard)
                 </div>
-                <div style={{ 
-                  background: 'var(--surface2)', 
-                  border: '1px solid var(--border)', 
-                  borderRadius: 8, 
-                  padding: '9px 12px', 
-                  fontFamily: 'var(--mono)', 
-                  fontSize: 12, 
-                  color: 'var(--accent)' 
+                <div style={{
+                  background: 'var(--surface2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  padding: '9px 12px',
+                  fontFamily: 'var(--mono)',
+                  fontSize: 12,
+                  color: 'var(--accent)',
                 }}>
                   {window.location.origin}/webhooks/nomba
                 </div>
@@ -397,37 +404,38 @@ export default function Settings() {
             <div className="card">
               <div className="card-title" style={{ marginBottom: 16 }}>Email (SMTP / Nodemailer)</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <FormField 
-                  label="SMTP Host" 
-                  value={form.smtpHost} 
-                  onChange={v => updateForm('smtpHost', v)} 
+                <FormField
+                  label="SMTP Host"
+                  value={form.email.smtpHost}
+                  onChange={v => updateEmail('smtpHost', v)}
                   placeholder="smtp.gmail.com"
                 />
-                <FormField 
-                  label="SMTP Port" 
-                  value={form.smtpPort} 
-                  onChange={v => updateForm('smtpPort', v)} 
+                <FormField
+                  label="SMTP Port"
+                  value={form.email.smtpPort}
+                  onChange={v => updateEmail('smtpPort', Number(v) || 0)}
                   type="number"
                 />
-                <FormField 
-                  label="SMTP User" 
-                  value={form.smtpUser} 
-                  onChange={v => updateForm('smtpUser', v)} 
+                <FormField
+                  label="SMTP User"
+                  value={form.email.smtpUser}
+                  onChange={v => updateEmail('smtpUser', v)}
                   placeholder="you@gmail.com"
                 />
-                <FormField 
-                  label="SMTP Pass" 
-                  value={form.smtpPass} 
-                  onChange={v => updateForm('smtpPass', v)} 
-                  type="password" 
-                  placeholder="App password"
+                <FormField
+                  label="SMTP Pass"
+                  value={form.email.smtpPass}
+                  onChange={v => updateEmail('smtpPass', v)}
+                  type="password"
+                  placeholder="App password (set on server, not saved here)"
                 />
               </div>
               <div style={{ marginTop: 12 }}>
-                <button 
-                  className="btn btn-ghost" 
-                  style={{ fontSize: 12 }} 
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 12 }}
                   onClick={sendTestEmail}
+                  type="button"
                 >
                   Send Test Email
                 </button>
@@ -439,29 +447,29 @@ export default function Settings() {
           {tab === 'notifications' && (
             <div className="card">
               <div className="card-title" style={{ marginBottom: 16 }}>Notification Preferences</div>
-              
+
               {NOTIFICATIONS.map(({ id, label }) => (
-                <div key={id} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between', 
-                  padding: '12px 0', 
-                  borderBottom: '1px solid var(--border)' 
+                <div key={id} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 0',
+                  borderBottom: '1px solid var(--border)',
                 }}>
                   <span style={{ fontSize: 13 }}>{label}</span>
-                  <Toggle 
+                  <Toggle
                     checked={form.notifications[id] || false}
-                    onChange={(checked) => updateNested('notifications', id, checked)}
+                    onChange={(checked) => updateNotification(id, checked)}
                   />
                 </div>
               ))}
-              
+
               <div className="form-field" style={{ marginTop: 16 }}>
                 <label>Low Stock Threshold</label>
-                <input 
-                  type="number" 
-                  value={form.lowStockThreshold} 
-                  onChange={e => updateForm('lowStockThreshold', e.target.value)}
+                <input
+                  type="number"
+                  value={form.notifications.lowStockThreshold}
+                  onChange={e => updateNotification('lowStockThreshold', Number(e.target.value) || 0)}
                   style={{ width: 100 }}
                 />
               </div>
@@ -472,88 +480,96 @@ export default function Settings() {
           {tab === 'security' && (
             <div className="card">
               <div className="card-title" style={{ marginBottom: 16 }}>Security Settings</div>
-              
-              {/* Security Toggles */}
+
+              <div style={{
+                padding: '10px 14px',
+                background: 'rgba(224,160,62,.08)',
+                border: '1px solid rgba(224,160,62,.25)',
+                borderRadius: 8,
+                marginBottom: 16,
+                fontSize: 12,
+                color: 'var(--muted)',
+              }}>
+                These toggles aren't wired to a backend field yet — models/Settings.js has no
+                `security` section, so changes here won't persist until that's added.
+              </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {SECURITY_SETTINGS.map(({ id, label }) => (
-                  <div key={id} style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'space-between', 
-                    padding: '12px 0', 
-                    borderBottom: '1px solid var(--border)' 
+                  <div key={id} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 0',
+                    borderBottom: '1px solid var(--border)',
                   }}>
                     <span style={{ fontSize: 13 }}>{label}</span>
-                    <Toggle 
+                    <Toggle
                       checked={form.security[id] || false}
-                      onChange={(checked) => updateNested('security', id, checked)}
+                      onChange={(checked) => updateSecurity(id, checked)}
                     />
                   </div>
                 ))}
               </div>
-              
-              {/* Change Password Section - NOW FULLY WORKING */}
-              <div style={{ 
-                marginTop: 24, 
-                borderTop: '1px solid var(--border)', 
-                paddingTop: 24 
+
+              <div style={{
+                marginTop: 24,
+                borderTop: '1px solid var(--border)',
+                paddingTop: 24,
               }}>
                 <div className="card-title" style={{ marginBottom: 12 }}>
                   Change Admin Password
                 </div>
-                
+
                 <div className="form-grid-1" style={{ maxWidth: 400 }}>
                   <div className="form-field">
                     <label>
                       Current Password <span style={{ color: '#e74c3c' }}>*</span>
                     </label>
-                    <input 
-                      type="password" 
-                      value={form.currentPassword || ''} 
-                      onChange={e => updatePassword('currentPassword', e.target.value)}
+                    <input
+                      type="password"
+                      value={form.currentPassword}
+                      onChange={e => updatePasswordField('currentPassword', e.target.value)}
                       placeholder="Enter current password"
                       autoComplete="current-password"
                     />
                   </div>
-                  
+
                   <div className="form-field">
                     <label>
                       New Password <span style={{ color: '#e74c3c' }}>*</span>
                     </label>
-                    <input 
-                      type="password" 
-                      value={form.newPassword || ''} 
-                      onChange={e => updatePassword('newPassword', e.target.value)}
+                    <input
+                      type="password"
+                      value={form.newPassword}
+                      onChange={e => updatePasswordField('newPassword', e.target.value)}
                       placeholder="Min 8 characters"
                       autoComplete="new-password"
                     />
-                    <div style={{ 
-                      fontSize: 12, 
-                      color: 'var(--text-muted)', 
-                      marginTop: 4 
-                    }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                       Must be at least 8 characters with letters and numbers
                     </div>
                   </div>
-                  
+
                   <div className="form-field">
                     <label>
                       Confirm Password <span style={{ color: '#e74c3c' }}>*</span>
                     </label>
-                    <input 
-                      type="password" 
-                      value={form.confirmPassword || ''} 
-                      onChange={e => updatePassword('confirmPassword', e.target.value)}
+                    <input
+                      type="password"
+                      value={form.confirmPassword}
+                      onChange={e => updatePasswordField('confirmPassword', e.target.value)}
                       placeholder="Repeat new password"
                       autoComplete="new-password"
                     />
                   </div>
-                  
-                  <button 
-                    className="btn btn-primary" 
+
+                  <button
+                    className="btn btn-primary"
                     onClick={changePassword}
                     disabled={changingPassword}
                     style={{ alignSelf: 'flex-start', marginTop: 8 }}
+                    type="button"
                   >
                     {changingPassword ? 'Updating Password...' : 'Update Password'}
                   </button>
@@ -566,38 +582,44 @@ export default function Settings() {
           {tab === 'shipping' && (
             <div className="card">
               <div className="card-title" style={{ marginBottom: 16 }}>Shipping Configuration</div>
-              
-              {SHIPPING_ZONES.map(({ id, label, default: defaultValue }) => (
-                <div key={id} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between', 
-                  padding: '10px 0', 
-                  borderBottom: '1px solid var(--border)' 
-                }}>
-                  <span style={{ fontSize: 13 }}>{label}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ color: 'var(--muted)', fontSize: 12 }}>₦</span>
-                    <input 
-                      type="number" 
-                      value={form.shipping[id] || defaultValue}
-                      onChange={(e) => updateNested('shipping', id, parseInt(e.target.value) || 0)}
-                      style={{ 
-                        background: 'var(--surface2)', 
-                        border: '1px solid var(--border)', 
-                        borderRadius: 6, 
-                        color: 'var(--text)', 
-                        fontFamily: 'var(--mono)', 
-                        fontSize: 13, 
-                        padding: '5px 8px', 
-                        outline: 'none', 
-                        width: 80, 
-                        textAlign: 'right' 
-                      }}
-                    />
-                  </div>
+
+              {form.shipping.zones.length === 0 ? (
+                <div style={{ color: 'var(--muted)', fontSize: 13, padding: '12px 0' }}>
+                  No shipping zones configured yet.
                 </div>
-              ))}
+              ) : (
+                form.shipping.zones.map((zone) => (
+                  <div key={zone.name} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 0',
+                    borderBottom: '1px solid var(--border)',
+                  }}>
+                    <span style={{ fontSize: 13 }}>{zone.name}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: 'var(--muted)', fontSize: 12 }}>₦</span>
+                      <input
+                        type="number"
+                        value={zone.price}
+                        onChange={(e) => updateZonePrice(zone.name, parseInt(e.target.value, 10) || 0)}
+                        style={{
+                          background: 'var(--surface2)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 6,
+                          color: 'var(--text)',
+                          fontFamily: 'var(--mono)',
+                          fontSize: 13,
+                          padding: '5px 8px',
+                          outline: 'none',
+                          width: 80,
+                          textAlign: 'right',
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>
@@ -615,10 +637,10 @@ function FormField({ label, value, onChange, type = 'text', placeholder, require
         {label}
         {required && <span style={{ color: '#e74c3c', marginLeft: 4 }}>*</span>}
       </label>
-      <input 
-        type={type} 
-        placeholder={placeholder} 
-        value={value || ''} 
+      <input
+        type={type}
+        placeholder={placeholder}
+        value={value ?? ''}
         onChange={e => onChange(e.target.value)}
       />
     </div>
@@ -626,21 +648,15 @@ function FormField({ label, value, onChange, type = 'text', placeholder, require
 }
 
 function Toggle({ checked, onChange }) {
-  const [on, setOn] = useState(checked || false);
-  
-  const handleClick = () => {
-    const newState = !on;
-    setOn(newState);
-    onChange?.(newState);
-  };
-
   return (
-    <div 
-      onClick={handleClick}
+    <div
+      onClick={() => onChange?.(!checked)}
+      role="switch"
+      aria-checked={checked}
       style={{
         width: 36,
         height: 20,
-        background: on ? 'var(--accent)' : 'var(--surface2)',
+        background: checked ? 'var(--accent)' : 'var(--surface2)',
         border: '1px solid var(--border)',
         borderRadius: 20,
         position: 'relative',
@@ -652,14 +668,14 @@ function Toggle({ checked, onChange }) {
       <div style={{
         position: 'absolute',
         top: 2,
-        left: on ? 18 : 2,
+        left: checked ? 18 : 2,
         width: 14,
         height: 14,
         background: '#fff',
         borderRadius: '50%',
         transition: 'left .2s',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-      }}/>
+        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+      }} />
     </div>
   );
 }
