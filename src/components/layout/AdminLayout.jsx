@@ -25,6 +25,7 @@ const NAV_BASE = [
   { to: '/admin/users', Icon: ShieldCheck, label: 'AdminUsers' },
   { to: '/admin/settings', Icon: SettingsIcon, label: 'Settings' },
   { to: '/admin/currencies', Icon: Wallet, label: 'Currencies' },
+  { to: '/admin/monitoring', Icon: AlertTriangle, label: 'Monitoring' },
 ];
 
 function timeAgo(date) {

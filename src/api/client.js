@@ -372,6 +372,10 @@ markNotificationsRead: () => api.patch('/admin/notifications/read-all'),
   // Settings
   changePassword: (data) => api.put('/admin/change-password', data),
   changeAdminPassword: (data) => api.put('/admin/settings/password', data),
+ 
+  monitoring: (windowMinutes = 60) =>
+    api.get('/admin/monitoring', { params: { windowMinutes } }),
+
 };
 
 // ═══════════════════════════════════════════════════════════════════
