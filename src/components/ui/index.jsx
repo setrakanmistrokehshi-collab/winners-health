@@ -88,17 +88,14 @@ export function ProductCard({ product, delay = 0 }) {
         )}
 
         {/* Badges */}
-        <div style={{
-          position: 'absolute', top: 12, left: 12, right: 12,
-          display: 'flex', gap: 4, flexWrap: 'wrap',
-        }}>
-          {product.badge && (
-            <span className='badge badge-forest' style={{ fontSize: 9, minWidth: 0 }}>{product.badge}</span>
-          )}
-          {discount > 0 && (
-            <span className='badge badge-amber' style={{ fontSize: 9 }}>-{discount}%</span>
-          )}
-        </div>
+       <div className="product-card-badges">
+  {product.badge && (
+    <span className="badge badge-forest">{product.badge}</span>
+  )}
+  {discount > 0 && (
+    <span className="badge badge-amber">-{discount}%</span>
+  )}
+</div>
 
         {/* Wishlist */}
         <button

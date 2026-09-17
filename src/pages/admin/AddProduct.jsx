@@ -12,7 +12,7 @@ const EMPTY = {
   nafdac: '', isFeatured: false, isActive: true,
 };
 
-const BADGE_OPTIONS = ['', 'Best Seller', 'New', 'Sale', 'Top Rated'];
+const BADGE_OPTIONS = ['', 'Best Selling', 'New', 'Sale', 'Top Rated'];
 
 export default function AddProduct() {
   const { id } = useParams();
