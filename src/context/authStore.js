@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { auth as authApi, TokenStore } from '@/api/client';
+import { saveReturnPath } from '@/components/ReturnPath';
 import { AUTO_LOGOUT_CONFIG } from '@/config/autoLogout';
 
 const AUTO_LOGOUT_MINUTES = AUTO_LOGOUT_CONFIG.minutes;
@@ -130,6 +131,10 @@ const useAuthStore = create(
       },
 
       logout: async () => {
+        // Remember where the user was
+        if (typeof window !== 'undefined') {
+    saveReturnPath(window.location.pathname + window.location.search);
+  }
         try {
           await authApi.logout();
         } catch (_) {
@@ -260,6 +265,8 @@ const useAuthStore = create(
             error: null,
           });
         } catch (_) {
+
+          saveReturnPath();
           TokenStore.clear();
 
           set({

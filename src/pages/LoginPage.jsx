@@ -7,7 +7,7 @@ import { Field } from '@/components/ui';
 import GoogleSignInButton  from '@/components/GoogleSignInButton';
 import toast from 'react-hot-toast';
 import { Leaf, Check, Mail, AlertTriangle, CheckCircle2, ChevronLeft, Eye, EyeOff } from 'lucide-react';
-
+import { consumeReturnPath } from '@/components/ReturnPath';
 // ── Shared Auth Card Shell ────────────────────────────────────────
 // Centered card layout (matches the approved reference template:
 // white background, single rounded card, blue accent) rather than the
@@ -102,17 +102,21 @@ export function LoginPage() {
     const result = await login(data);
     if (result.success) {
       toast.success('Welcome back!');
-      navigate(params.get('redirect') || '/');
+      const redirect = consumeReturnPath(params.get('redirect') || '/');
+navigate(redirect, { replace: true });
     } else {
       toast.error(result.error);
     }
   };
-
-  const handleGoogleSuccess = (data) => {
-    loginWithGoogle(data);
-    toast.success('Welcome back!');
-    navigate(params.get('redirect') || '/');
-  };
+const handleGoogleSuccess = (data) => {
+  loginWithGoogle(data);
+  toast.success('Welcome back!');
+  const queryRedirect = params.get('redirect');
+  const to =
+    (queryRedirect?.startsWith('/') && !queryRedirect.startsWith('//') && queryRedirect) ||
+    consumeReturnPath('/');
+  navigate(to, { replace: true });
+};
 
   const handleGoogleError = (err) => {
     toast.error(err.message || 'Google sign-in failed.');
