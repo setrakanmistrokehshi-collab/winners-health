@@ -286,7 +286,9 @@ export const orders = {
 export const payments = {
   validatePromo: (code) => api.post('/payments/validate-promo', { code }),
   checkout: (data) => api.post('/payments/checkout', data),
-  verifyStatus: (reference) => api.get(`/payments/${reference}/status`),
+  // api/client.js
+verifyStatus: (reference) =>
+  api.get(`/payments/${encodeURIComponent(reference)}/status`),
 };
 
 // ═══════════════════════════════════════════════════════════════════
