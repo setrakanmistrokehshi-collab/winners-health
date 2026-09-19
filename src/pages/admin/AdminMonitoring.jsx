@@ -35,12 +35,18 @@ export default function AdminMonitoring() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const { data: res } = await api.get('/admin/monitoring', { params: { windowMinutes } });
+   
+      if (!res?.success) {
+        throw new Error(res?.message || res?.error || 'Failed to load monitoring data');
+      }
+
       setData(res?.data ?? null);
     } catch (err) {
       console.error('Failed to load monitoring data:', err);
