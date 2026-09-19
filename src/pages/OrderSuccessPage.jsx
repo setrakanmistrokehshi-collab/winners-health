@@ -14,23 +14,46 @@ export default function OrderSuccessPage() {
   const [order, setOrder]   = useState(null);
 
   useEffect(() => {
-    if (!ref) { setStatus('success'); return; }
+  if (!ref) {
+    setStatus('success');
+    return;
+  }
+
+  let cancelled = false;
+  let attempts = 0;
+  const maxAttempts = 10;        // ~20s if interval is 2s
+
+  const check = () => {
     paymentsApi.verifyStatus(ref)
       .then(({ data }) => {
+        if (cancelled) return;
         setOrder(data.order);
-        const isSuccess = data.paymentStatus === 'completed';
-        setStatus(isSuccess ? 'success' : 'pending');
-        // Deterministic per-order ID (not a fresh generateEventId())
-        // so reloading this page re-sends the SAME event_id — Meta
-        // dedupes repeats of an identical ID rather than counting
-        // each page reload as a new Purchase.
-        if (isSuccess && data.order?._id) {
-          trackPurchase(data.order, purchaseEventId(data.order._id));
+        if (data.paymentStatus === 'completed') {
+          setStatus('success');
+          if (data.order?._id) {
+            trackPurchase(data.order, purchaseEventId(data.order._id));
+          }
+          return; // stop
+        }
+        setStatus('pending');
+        attempts += 1;
+        if (attempts < maxAttempts) {
+          timer = setTimeout(check, 2000);
         }
       })
-      .catch(() => setStatus('success'));
-  }, [ref]);
+      .catch(() => {
+        if (!cancelled) setStatus('success'); // fail-open
+      });
+  };
 
+  let timer;
+  check();
+
+  return () => {
+    cancelled = true;
+    clearTimeout(timer);
+  };
+}, [ref]);
   if (status === 'loading') return <PageLoader />;
 
   return (
