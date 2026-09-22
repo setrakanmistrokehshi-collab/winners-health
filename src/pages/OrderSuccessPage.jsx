@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { payments as paymentsApi } from '@/api/client';
+import { orders as ordersApi } from '@/api/client';
 import { PageLoader } from '@/components/ui';
 import { formatNaira } from '@/config/money';
 import { CheckCircle2, Clock3 } from 'lucide-react';
@@ -21,7 +21,7 @@ export default function OrderSuccessPage() {
 
   let cancelled = false;
   let attempts = 0;
-  const maxAttempts = 15; // ~30s
+  const maxAttempts = 4;
   let timer = null;
 
   const clear = () => {
@@ -31,30 +31,34 @@ export default function OrderSuccessPage() {
     }
   };
 
-  const isPaid = (data) => {
-    const ps =
-      data?.paymentStatus ??
-      data?.order?.paymentStatus ??
-      data?.status ??
-      data?.order?.status;
-    return ['completed', 'paid', 'success', 'successful'].includes(
-      String(ps || '').toLowerCase()
-    );
+  const isConfirmed = (data) => {
+    const payment =
+      data?.paymentStatus ?? data?.order?.paymentStatus ?? '';
+    const orderStatus =
+      data?.order?.status ?? data?.status ?? '';
+
+    const p = String(payment).toLowerCase();
+    const s = String(orderStatus).toLowerCase();
+
+    if (['cancelled', 'refunded'].includes(s)) return false;
+    if (['completed', 'paid', 'success', 'successful'].includes(p)) return true;
+    if (['paid', 'processing', 'shipped', 'delivered'].includes(s)) return true;
+    return false;
   };
 
   const check = async () => {
     try {
-      const res = await paymentsApi.verifyStatus(ref);
+      const res = await ordersApi.verifyStatus(ref);
       const data = res?.data?.data ?? res?.data ?? res;
       if (cancelled) return;
 
-      const order = data.order ?? data;
-      setOrder(order);
+      const ord = data.order ?? data;
+      setOrder(ord);
 
-      if (isPaid(data)) {
+      if (isConfirmed(data)) {
         setStatus('success');
-        if (order?._id) {
-          trackPurchase(order, purchaseEventId(order._id));
+        if (ord?._id) {
+          trackPurchase(ord, purchaseEventId(ord._id));
         }
         return;
       }
@@ -62,19 +66,24 @@ export default function OrderSuccessPage() {
       setStatus('pending');
       attempts += 1;
       if (attempts < maxAttempts && !cancelled) {
-        timer = setTimeout(check, 2000);
+        timer = setTimeout(check, 20000);
       }
     } catch (err) {
-      console.warn('verifyStatus failed', err);
       if (cancelled) return;
+      const code = err?.response?.status;
+      if (code === 404 || code === 400) {
+        setStatus('pending');
+        return;
+      }
       attempts += 1;
       if (attempts < maxAttempts) {
-        timer = setTimeout(check, 2000);
+        timer = setTimeout(check, 20000);
       } else {
         setStatus('pending');
       }
     }
   };
+
 
   check();
 
@@ -83,7 +92,6 @@ export default function OrderSuccessPage() {
     clear();
   };
 }, [ref]);
-
 
   if (status === 'loading') return <PageLoader />;
 
