@@ -213,13 +213,15 @@ export default function AdminLayout() {
       await Promise.all(tasks);
 
       setBadges({ pendingOrders, pendingReviews });
+const mapped = apiNotifs.map(mapApiNotification);
+const derived = deriveFromStats(stats, pendingOrders, pendingReviews);
 
-      const mapped = apiNotifs.map(mapApiNotification);
-      const list =
-        mapped.length > 0
-          ? mapped
-          : deriveFromStats(stats, pendingOrders, pendingReviews);
-
+// Prefer API; always keep derived alerts that aren’t duplicates
+const apiIds = new Set(mapped.map((n) => n.id));
+const list = [
+  ...mapped,
+  ...derived.filter((d) => !apiIds.has(d.id)),
+];
       setNotifications(list);
       setUnread(list.filter((n) => !n.read).length);
     } catch (err) {

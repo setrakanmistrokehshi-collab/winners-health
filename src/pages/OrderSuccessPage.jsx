@@ -13,7 +13,7 @@ export default function OrderSuccessPage() {
   const [status, setStatus] = useState('loading');
   const [order, setOrder]   = useState(null);
 
-  useEffect(() => {
+ useEffect(() => {
   if (!ref) {
     setStatus('success');
     return;
@@ -21,39 +21,70 @@ export default function OrderSuccessPage() {
 
   let cancelled = false;
   let attempts = 0;
-  const maxAttempts = 10;        // ~20s if interval is 2s
+  const maxAttempts = 15; // ~30s
+  let timer = null;
 
-  const check = () => {
-    paymentsApi.verifyStatus(ref)
-      .then(({ data }) => {
-        if (cancelled) return;
-        setOrder(data.order);
-        if (data.paymentStatus === 'completed') {
-          setStatus('success');
-          if (data.order?._id) {
-            trackPurchase(data.order, purchaseEventId(data.order._id));
-          }
-          return; // stop
-        }
-        setStatus('pending');
-        attempts += 1;
-        if (attempts < maxAttempts) {
-          timer = setTimeout(check, 2000);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setStatus('success'); // fail-open
-      });
+  const clear = () => {
+    if (timer != null) {
+      clearTimeout(timer);
+      timer = null;
+    }
   };
 
-  let timer;
+  const isPaid = (data) => {
+    const ps =
+      data?.paymentStatus ??
+      data?.order?.paymentStatus ??
+      data?.status ??
+      data?.order?.status;
+    return ['completed', 'paid', 'success', 'successful'].includes(
+      String(ps || '').toLowerCase()
+    );
+  };
+
+  const check = async () => {
+    try {
+      const res = await paymentsApi.verifyStatus(ref);
+      const data = res?.data?.data ?? res?.data ?? res;
+      if (cancelled) return;
+
+      const order = data.order ?? data;
+      setOrder(order);
+
+      if (isPaid(data)) {
+        setStatus('success');
+        if (order?._id) {
+          trackPurchase(order, purchaseEventId(order._id));
+        }
+        return;
+      }
+
+      setStatus('pending');
+      attempts += 1;
+      if (attempts < maxAttempts && !cancelled) {
+        timer = setTimeout(check, 2000);
+      }
+    } catch (err) {
+      console.warn('verifyStatus failed', err);
+      if (cancelled) return;
+      attempts += 1;
+      if (attempts < maxAttempts) {
+        timer = setTimeout(check, 2000);
+      } else {
+        setStatus('pending');
+      }
+    }
+  };
+
   check();
 
   return () => {
     cancelled = true;
-    clearTimeout(timer);
+    clear();
   };
 }, [ref]);
+
+
   if (status === 'loading') return <PageLoader />;
 
   return (
