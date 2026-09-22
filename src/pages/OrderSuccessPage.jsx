@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { orders as ordersApi } from '@/api/client';
+import { orders as ordersApi  } from '@/api/client';
 import { PageLoader } from '@/components/ui';
 import { formatNaira } from '@/config/money';
 import { CheckCircle2, Clock3 } from 'lucide-react';
@@ -46,43 +46,43 @@ export default function OrderSuccessPage() {
     return false;
   };
 
-  const check = async () => {
-    try {
-      const res = await ordersApi.verifyStatus(ref);
-      const data = res?.data?.data ?? res?.data ?? res;
-      if (cancelled) return;
+ const check = async () => {
+  try {
+    const res = await ordersApi.verifyStatus(ref);
+    const data = res?.data?.data ?? res?.data ?? res;
+    if (cancelled) return;
 
-      const ord = data.order ?? data;
-      setOrder(ord);
+    const ord = data.order ?? data;
+    setOrder(ord);
 
-      if (isConfirmed(data)) {
-        setStatus('success');
-        if (ord?._id) {
-          trackPurchase(ord, purchaseEventId(ord._id));
-        }
-        return;
+    if (isConfirmed(data)) {
+      setStatus('success');
+      if (ord?._id) {
+        trackPurchase(ord, purchaseEventId(ord._id));
       }
-
-      setStatus('pending');
-      attempts += 1;
-      if (attempts < maxAttempts && !cancelled) {
-        timer = setTimeout(check, 20000);
-      }
-    } catch (err) {
-      if (cancelled) return;
-      const code = err?.response?.status;
-      if (code === 404 || code === 400) {
-        setStatus('pending');
-        return;
-      }
-      attempts += 1;
-      if (attempts < maxAttempts) {
-        timer = setTimeout(check, 20000);
-      } else {
-        setStatus('pending');
-      }
+      return;
     }
-  };
+
+    setStatus('pending');
+    attempts += 1;
+    if (attempts < maxAttempts && !cancelled) {
+      timer = setTimeout(check, 20000);
+    }
+  } catch (err) {
+    if (cancelled) return;
+
+    // Always exit the full-page loader after the first try
+    setStatus('pending');
+
+    const code = err?.response?.status;
+    if (code === 404 || code === 400) return; // don't retry permanent errors
+
+    attempts += 1;
+    if (attempts < maxAttempts && !cancelled) {
+      timer = setTimeout(check, 20000);
+    }
+  }
+};
 
 
   check();
