@@ -1,7 +1,7 @@
 // src/components/AutoLogoutManager.jsx
 import { useEffect, useRef } from 'react';
 import useAuthStore from '@/context/authStore';
-import { AUTO_LOGOUT_CONFIG } from '@/config/autoLogout'; // 👈 IMPORT CONFIG
+import { AUTO_LOGOUT_CONFIG } from '@/config/autoLogout'; 
 
 export function AutoLogoutManager() {
   const { 
@@ -10,7 +10,7 @@ export function AutoLogoutManager() {
     cancelAutoLogout,
     isAutoLogoutActive,
     secondsUntilAutoLogout,
-    logout 
+    
   } = useAuthStore();
 
   const hasShownWarning = useRef(false);

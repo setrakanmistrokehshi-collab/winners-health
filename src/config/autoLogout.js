@@ -1,7 +1,7 @@
 // src/config/autoLogout.js
 export const AUTO_LOGOUT_CONFIG = {
   // Change this value to adjust auto-logout time (in minutes)
-  minutes: 7, // 👈 Change this number directly
+  minutes: 13, // 👈 Change this number directly
   
   // Warn user 1 minute before logout
   warningThreshold: 60, // seconds

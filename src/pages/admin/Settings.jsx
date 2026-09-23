@@ -45,6 +45,8 @@ const EMPTY_FORM = {
     nombaPublicKey: '', webhookSecret: '',
   },
   shipping: {
+    fee: 2500,
+    freeThreshold: 25000,
     zones: [], // [{ name, price }, ...] — shape and content come entirely from the backend
   },
   notifications: {
@@ -82,11 +84,17 @@ export default function Settings() {
       // Controller wraps as { success, data: {...} }
       const settings = data?.data ?? data ?? {};
 
+      const nextShipping = settings.shipping ?? {};
       setForm(prev => ({
         ...prev,
         store:         { ...prev.store,         ...settings.store },
         payments:      { ...prev.payments,      ...settings.payments },
-        shipping:      { ...prev.shipping,      zones: settings.shipping?.zones ?? [] },
+        shipping: {
+          ...prev.shipping,
+          fee: Number(nextShipping.fee ?? nextShipping.shippingFee ?? prev.shipping.fee ?? 2500),
+          freeThreshold: Number(nextShipping.freeThreshold ?? nextShipping.freeShippingThreshold ?? prev.shipping.freeThreshold ?? 25000),
+          zones: nextShipping.zones ?? [],
+        },
         notifications: { ...prev.notifications, ...settings.notifications },
         email:         { ...prev.email,         ...settings.email },
         // security has no backend field yet — leave as-is
@@ -117,6 +125,16 @@ export default function Settings() {
 
   function updateSecurity(key, value) {
     setForm(prev => ({ ...prev, security: { ...prev.security, [key]: value } }));
+  }
+
+  function updateShippingField(key, value) {
+    setForm(prev => ({
+      ...prev,
+      shipping: {
+        ...prev.shipping,
+        [key]: Number(value) || 0,
+      },
+    }));
   }
 
   function updateZonePrice(zoneName, price) {
@@ -154,7 +172,11 @@ export default function Settings() {
       await api.post('/admin/settings', {
         store: form.store,
         payments: form.payments,
-        shipping: { zones: form.shipping.zones },
+        shipping: {
+          fee: Number(form.shipping.fee) || 0,
+          freeThreshold: Number(form.shipping.freeThreshold) || 0,
+          zones: form.shipping.zones,
+        },
         notifications: form.notifications,
         email: {
           smtpHost: form.email.smtpHost,
@@ -582,6 +604,23 @@ export default function Settings() {
           {tab === 'shipping' && (
             <div className="card">
               <div className="card-title" style={{ marginBottom: 16 }}>Shipping Configuration</div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                <FormField
+                  label="Shipping Fee (₦)"
+                  value={form.shipping.fee}
+                  onChange={v => updateShippingField('fee', v)}
+                  type="number"
+                  placeholder="2500"
+                />
+                <FormField
+                  label="Free Shipping Threshold (₦)"
+                  value={form.shipping.freeThreshold}
+                  onChange={v => updateShippingField('freeThreshold', v)}
+                  type="number"
+                  placeholder="25000"
+                />
+              </div>
 
               {form.shipping.zones.length === 0 ? (
                 <div style={{ color: 'var(--muted)', fontSize: 13, padding: '12px 0' }}>

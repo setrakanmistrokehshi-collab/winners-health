@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import useCartStore from '@/context/cartStore';
 import useAuthStore from '@/context/authStore';
-import { payments as paymentsApi } from '@/api/client';
+import api, { payments as paymentsApi } from '@/api/client';
 import { Field } from '@/components/ui';
 import {
   formatNairaAmount as formatNaira,
@@ -28,6 +28,10 @@ export default function CheckoutPage() {
   const [checkingPromo, setCheckingPromo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [gateway, setGateway] = useState('monnify');
+  const [shippingConfig, setShippingConfig] = useState({
+    shippingFee: 2500,
+    freeShippingThreshold: 25000,
+  });
   const currency = useCurrencyStore((s) => s.getCurrent());
   const {  changes: priceChanges } = useRevalidateCart();
   const { register, handleSubmit, formState: { errors } } = useForm({
@@ -45,15 +49,39 @@ export default function CheckoutPage() {
   // preview only; it never determines the actual charge.
   const subtotal  = items.reduce((s, i) => s + i.price * i.quantity, 0);
   const discount  = promoData ? Math.round(subtotal * (promoData.discountPercent / 100)) : 0;
-  const shipping  = calculateShipping(subtotal, discount);
+  const shippingFee = Number(shippingConfig.shippingFee ?? shippingConfig.fee ?? 2500);
+  const freeShippingThreshold = Number(shippingConfig.freeShippingThreshold ?? shippingConfig.freeThreshold ?? 25000);
+  const shipping  = subtotal - discount >= freeShippingThreshold ? 0 : shippingFee;
   const total     = subtotal + shipping - discount;
 
   useEffect(() => {
+    let mounted = true;
+
+    async function loadShippingConfig() {
+      try {
+        const { data } = await api.get('/admin/settings');
+        const settings = data?.data ?? data ?? {};
+        const shippingOptions = settings.shipping ?? {};
+
+        if (!mounted) return;
+
+        setShippingConfig({
+          shippingFee: Number(shippingOptions.fee ?? shippingOptions.shippingFee ?? shippingOptions.price ?? 2500),
+          freeShippingThreshold: Number(shippingOptions.freeThreshold ?? shippingOptions.freeShippingThreshold ?? 25000),
+        });
+      } catch (err) {
+        console.warn('Failed to load live shipping config, using fallback values:', err);
+      }
+    }
+
+    loadShippingConfig();
+
     if (items.length > 0) {
       trackInitiateCheckout(items, subtotal, generateEventId());
     }
-    
-  }, []);
+
+    return () => { mounted = false; };
+  }, [items, subtotal]);
 
   const handlePromo = async () => {
     if (!promo.trim()) return;
