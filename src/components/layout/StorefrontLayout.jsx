@@ -589,7 +589,7 @@ function FooterLinks({ links }) {
   return (
     <ul className="sf-footer-links">
       {links.map((l) => (
-        <li key={l.to}>
+        <li key={`${l.to}-${l.label}`}>
           <Link to={l.to}>{l.label}</Link>
         </li>
       ))}

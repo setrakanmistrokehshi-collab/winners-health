@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { orders as ordersApi } from '@/api/client';
-import { PageLoader, EmptyState, OrderStatusBadge, Modal } from '@/components/ui';
+import { PageLoader, EmptyState, OrderStatusBadge, Modal, Pagination } from '@/components/ui';
 import PaymentStatusBanner from '@/pages/Paymentstatusbanner';
 import { formatNaira } from '@/config/money';
 import { format } from 'date-fns';
@@ -9,18 +9,47 @@ import toast from 'react-hot-toast';
 import { Package, Truck, Box } from 'lucide-react';
 import PriceTag from '@/components/PriceTag';
 
+const PAGE_SIZE = 10;
+
 export default function OrdersPage() {
   const [orderList, setOrderList] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [selected, setSelected]   = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalOrders, setTotalOrders] = useState(0);
 
   useEffect(() => {
-    ordersApi.myOrders()
-      .then(({ data }) => setOrderList(data.orders))
-      .catch(() => setOrderList([]))
-      .finally(() => setLoading(false));
-  }, []);
+    let mounted = true;
+
+    async function loadOrders() {
+      setLoading(true);
+      try {
+        const { data } = await ordersApi.myOrders({ page, limit: PAGE_SIZE, sort: '-createdAt' });
+        const payload = data?.data ?? data ?? {};
+        const orders = payload.orders ?? payload.items ?? payload.results ?? [];
+        const total = payload.pagination?.total ?? payload.total ?? orders.length;
+        const pages = payload.pagination?.pages ?? Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+        if (!mounted) return;
+
+        setOrderList(Array.isArray(orders) ? orders : []);
+        setTotalOrders(Number(total) || 0);
+        setTotalPages(Number(pages) || 1);
+      } catch (err) {
+        if (!mounted) return;
+        setOrderList([]);
+        setTotalOrders(0);
+        setTotalPages(1);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    loadOrders();
+    return () => { mounted = false; };
+  }, [page]);
 
   const handleCancel = async (id) => {
     if (!confirm('Cancel this order?')) return;
@@ -123,6 +152,14 @@ export default function OrdersPage() {
                 </div>
               </div>
             ))}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-2)' }}>
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+                Page {page} of {totalPages} · {totalOrders} total
+              </span>
+            </div>
+
+            <Pagination page={page} pages={totalPages} onPage={setPage} />
           </div>
         )}
       </div>

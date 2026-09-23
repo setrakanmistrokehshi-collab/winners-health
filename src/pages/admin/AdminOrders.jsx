@@ -24,13 +24,22 @@ export default function AdminOrders() {
 
   const fetchOrders = useCallback(() => {
     setLoading(true);
-    ordersApi.all({ page, limit: 15, status: status || undefined, search: search || undefined })
-      .then(({ data }) => {
-        setItems(data.orders || []);
-        setTotal(data.pagination?.total || 0);
-        setPages(data.pagination?.pages || 1);
+    ordersApi.all({ page, limit: 8, status: status || undefined, search: search || undefined })
+      .then((response) => {
+        const body = response?.data?.data ?? response?.data ?? response ?? {};
+        const nextItems = body.orders ?? body.items ?? body.results ?? [];
+        const nextTotal = Number(body.pagination?.total ?? body.total ?? nextItems.length ?? 0);
+        const nextPages = Number(body.pagination?.pages ?? Math.max(1, Math.ceil(nextTotal / 8)) ?? 1);
+
+        setItems(Array.isArray(nextItems) ? nextItems : []);
+        setTotal(nextTotal);
+        setPages(nextPages);
       })
-      .catch(() => {})
+      .catch(() => {
+        setItems([]);
+        setTotal(0);
+        setPages(1);
+      })
       .finally(() => setLoading(false));
   }, [page, status, search]);
 

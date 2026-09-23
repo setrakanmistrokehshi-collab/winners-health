@@ -269,7 +269,7 @@ export const coupons = promoCodes;
 // ═══════════════════════════════════════════════════════════════════
 export const orders = {
   // Customer
-  myOrders: () => api.get('/orders'),
+  myOrders: (params = {}) => api.get('/orders', { params }),
   get: (id) => api.get(`/orders/${id}`),
   cancel: (id) => api.post(`/orders/${id}/cancel`),
   recent: (limit = 10) => api.get('/orders', { params: { limit, sort: '-createdAt' } }),
