@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // ── Base URL ──────────────────────────────────────────────────────
-const ROOT_URL = import.meta.env.VITE_API_BASE_URL;
+const ROOT_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.API_BASE_URL ;
 const API_V1 = `${ROOT_URL}/api/v1`;
 
 // ── Token storage ────────────────────────────────────────────────
