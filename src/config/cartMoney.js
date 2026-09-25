@@ -42,8 +42,8 @@ export function formatMoney(naira, currencyCode, rate) {
   })}`;
 }
 
-export const FREE_SHIPPING_THRESHOLD_NAIRA = 25_000;
-export const SHIPPING_FEE_NAIRA = 2_500;
+export const FREE_SHIPPING_THRESHOLD_NAIRA = 0;
+export const SHIPPING_FEE_NAIRA = 0;
 
 export function calculateShippingNaira(subtotalNaira, discountNaira = 0) {
   return subtotalNaira - discountNaira >= FREE_SHIPPING_THRESHOLD_NAIRA

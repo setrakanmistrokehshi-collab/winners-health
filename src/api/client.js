@@ -291,6 +291,16 @@ verifyStatus: (reference) =>
   api.get(`/payments/${encodeURIComponent(reference)}/status`),
 };
 
+// ===========================================================================
+// SHIPPING /shipping
+// Dedicated shipping API boundary for diagnosing fee, zone, and location
+// resolution independently from admin settings and payment creation.
+// ===========================================================================
+export const shipping = {
+  getConfig: () => api.get('/shipping/config'),
+  quote: (data) => api.post('/shipping/quote', data),
+};
+
 // ═══════════════════════════════════════════════════════════════════
 // CURRENCIES  /currencies
 // ═══════════════════════════════════════════════════════════════════

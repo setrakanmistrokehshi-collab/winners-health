@@ -45,8 +45,8 @@ const EMPTY_FORM = {
     nombaPublicKey: '', webhookSecret: '',
   },
   shipping: {
-    fee: 2500,
-    freeThreshold: 25000,
+    fee: 0,
+    freeThreshold: 0,
     zones: [], // [{ name, price }, ...] — shape and content come entirely from the backend
   },
   notifications: {
@@ -58,9 +58,6 @@ const EMPTY_FORM = {
     smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '',
   },
   security: {},
-
-  // Password-change fields aren't part of the Settings document —
-  // kept separate so they never get sent in the settings save payload.
   currentPassword: '',
   newPassword: '',
   confirmPassword: '',
@@ -72,6 +69,8 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [changingPassword, setChangingPassword] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [newZoneName, setNewZoneName] = useState('');
+  const [newZonePrice, setNewZonePrice] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -91,9 +90,17 @@ export default function Settings() {
         payments:      { ...prev.payments,      ...settings.payments },
         shipping: {
           ...prev.shipping,
-          fee: Number(nextShipping.fee ?? nextShipping.shippingFee ?? prev.shipping.fee ?? 2500),
-          freeThreshold: Number(nextShipping.freeThreshold ?? nextShipping.freeShippingThreshold ?? prev.shipping.freeThreshold ?? 25000),
-          zones: nextShipping.zones ?? [],
+          fee: Math.max(0, Number(nextShipping.fee ?? nextShipping.standardFee ?? 0) || 0),
+          freeThreshold: Math.max(
+            0,
+            Number(nextShipping.freeThreshold ?? nextShipping.freeShippingThreshold ?? 0) || 0
+          ),
+          zones: Array.isArray(nextShipping.zones)
+            ? nextShipping.zones.map((zone) => ({
+                name: String(zone.name ?? '').trim(),
+                price: Math.max(0, Number(zone.price) || 0),
+              }))
+            : [],
         },
         notifications: { ...prev.notifications, ...settings.notifications },
         email:         { ...prev.email,         ...settings.email },
@@ -138,13 +145,90 @@ export default function Settings() {
   }
 
   function updateZonePrice(zoneName, price) {
+    const safePrice = Number(price) || 0;
     setForm(prev => ({
       ...prev,
       shipping: {
         ...prev.shipping,
         zones: prev.shipping.zones.map(z =>
-          z.name === zoneName ? { ...z, price } : z
+          z.name === zoneName ? { ...z, price: Math.max(0, safePrice) } : z
         ),
+      },
+    }));
+  }
+
+  function addShippingZone() {
+    const name = newZoneName.trim();
+    const priceValue = newZonePrice.trim();
+    const parsedPrice = Number(priceValue);
+
+    if (!name) {
+      toast.error('Zone name is required');
+      return;
+    }
+
+    if (!priceValue || !Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      toast.error('Zone price must be a valid non-negative number');
+      return;
+    }
+
+    if (form.shipping.zones.some(zone => zone.name.toLowerCase() === name.toLowerCase())) {
+      toast.error('A shipping zone with that name already exists');
+      return;
+    }
+
+    setForm(prev => ({
+      ...prev,
+      shipping: {
+        ...prev.shipping,
+        zones: [...prev.shipping.zones, { name, price: Math.max(0, parsedPrice) }],
+      },
+    }));
+
+    setNewZoneName('');
+    setNewZonePrice('');
+  }
+
+  function validateShippingConfig() {
+    const fee = Number(form.shipping.fee);
+    const threshold = Number(form.shipping.freeThreshold);
+
+    if (!Number.isFinite(fee) || fee < 0) {
+      return 'Shipping fee must be a valid non-negative number.';
+    }
+
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      return 'Free shipping threshold must be a valid non-negative number.';
+    }
+
+    const seenNames = new Set();
+    for (const zone of form.shipping.zones) {
+      const zoneName = String(zone.name ?? '').trim();
+      const zonePrice = Number(zone.price);
+
+      if (!zoneName) {
+        return 'Every shipping zone needs a name.';
+      }
+
+      if (seenNames.has(zoneName.toLowerCase())) {
+        return `Duplicate shipping zone name: ${zoneName}`;
+      }
+      seenNames.add(zoneName.toLowerCase());
+
+      if (!Number.isFinite(zonePrice) || zonePrice < 0) {
+        return `Shipping zone "${zoneName}" must have a valid non-negative price.`;
+      }
+    }
+
+    return '';
+  }
+
+  function removeShippingZone(zoneName) {
+    setForm(prev => ({
+      ...prev,
+      shipping: {
+        ...prev.shipping,
+        zones: prev.shipping.zones.filter(z => z.name !== zoneName),
       },
     }));
   }
@@ -160,6 +244,12 @@ export default function Settings() {
     }
     if (!form.store.email.trim() || !form.store.email.includes('@')) {
       toast.error('Valid store email is required');
+      return;
+    }
+
+    const validationError = validateShippingConfig();
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
@@ -187,9 +277,7 @@ export default function Settings() {
         },
       });
       toast.success('Settings saved successfully!');
-      // Payment keys come back masked after save (backend never
-      // echoes real secrets) — reload so the form reflects that
-      // rather than showing the plaintext value just typed.
+     
       await loadSettings();
     } catch (err) {
       console.error('Failed to save settings:', err);
@@ -609,17 +697,36 @@ export default function Settings() {
                 <FormField
                   label="Shipping Fee (₦)"
                   value={form.shipping.fee}
-                  onChange={v => updateShippingField('fee', v)}
+                  onChange={(v) => updateShippingField('fee', v)}
                   type="number"
-                  placeholder="2500"
+                  placeholder="5000"
                 />
                 <FormField
                   label="Free Shipping Threshold (₦)"
                   value={form.shipping.freeThreshold}
-                  onChange={v => updateShippingField('freeThreshold', v)}
+                  onChange={(v) => updateShippingField('freeThreshold', v)}
                   type="number"
-                  placeholder="25000"
+                  placeholder="60000"
                 />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr auto', gap: 10, marginBottom: 16 }}>
+                <input
+                  className='input'
+                  placeholder='Zone name (e.g. Lagos Mainland)'
+                  value={newZoneName}
+                  onChange={(e) => setNewZoneName(e.target.value)}
+                />
+                <input
+                  className='input'
+                  type='number'
+                  placeholder='Price'
+                  value={newZonePrice}
+                  onChange={(e) => setNewZonePrice(e.target.value)}
+                />
+                <button className='btn btn-primary btn-sm' type='button' onClick={addShippingZone}>
+                  Add Zone
+                </button>
               </div>
 
               {form.shipping.zones.length === 0 ? (
@@ -634,8 +741,9 @@ export default function Settings() {
                     justifyContent: 'space-between',
                     padding: '10px 0',
                     borderBottom: '1px solid var(--border)',
+                    gap: 12,
                   }}>
-                    <span style={{ fontSize: 13 }}>{zone.name}</span>
+                    <span style={{ fontSize: 13, flex: 1 }}>{zone.name}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: 'var(--muted)', fontSize: 12 }}>₦</span>
                       <input
@@ -656,6 +764,14 @@ export default function Settings() {
                         }}
                       />
                     </div>
+                    <button
+                      type='button'
+                      className='btn btn-ghost btn-sm'
+                      onClick={() => removeShippingZone(zone.name)}
+                      style={{ color: 'var(--danger)', padding: '4px 8px' }}
+                    >
+                      Remove
+                    </button>
                   </div>
                 ))
               )}
