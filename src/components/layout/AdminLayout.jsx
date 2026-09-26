@@ -21,6 +21,7 @@ const NAV_BASE = [
   { to: '/admin/products', Icon: Package, label: 'Product List' },
   { to: '/admin/reviews', Icon: Star, label: 'Reviews', badgeKey: 'pendingReviews' },
   { to: '/admin/categories', Icon: Tag, label: 'Categories' },
+  { to: '/admin/promo-codes', Icon: Tag, label: 'Promo Codes' },
   { section: 'Admin' },
   { to: '/admin/users', Icon: ShieldCheck, label: 'AdminUsers' },
   { to: '/admin/settings', Icon: SettingsIcon, label: 'Settings' },

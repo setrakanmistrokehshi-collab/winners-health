@@ -61,6 +61,7 @@ import EditUserRole from '@/pages/admin/EditUserRole';
 import Settings from '@/pages/admin/Settings';
 import AdminCurrencies from '@/pages/admin/AdminCurrencies';
 import AdminMonitoring from '@/pages/admin/AdminMonitoring';
+import AdminPromoCodes from '@/pages/admin/AdminPromoCodes';
 products.list({ page: 1, limit: 12 }).catch(() => {});
 products.list({ page: 1, limit: 12, featured: true }).catch(() => {});
 
@@ -205,6 +206,7 @@ const router = createBrowserRouter([
           { path: 'reports', element: <Reports /> },
           { path: 'reviews', element: <Reviews /> },
           { path: 'categories', element: <Categories /> },
+          { path: 'promo-codes', element: <AdminPromoCodes /> },
           { path: 'settings', element: <Settings /> },
           { path: 'currencies', element: <AdminCurrencies /> },
           { path: 'monitoring', element: <AdminMonitoring /> },
