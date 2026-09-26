@@ -7,6 +7,7 @@ export const PERMISSIONS = {
   ORDERS_VIEW:       'orders.view',
   ORDERS_UPDATE:     'orders.update',
   ORDERS_NOTIFY:     'orders.notify',
+  PAYMENT_FOLLOW_UP: 'payments.follow_up',
 
   PRODUCTS_VIEW:     'products.view',
   PRODUCTS_CREATE:   'products.create',

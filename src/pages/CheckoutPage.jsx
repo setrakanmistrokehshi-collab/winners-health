@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 //import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { useSearchParams } from 'react-router-dom';
 import useCartStore from '@/context/cartStore';
 import useAuthStore from '@/context/authStore';
-import api, { payments as paymentsApi, shipping as shippingApi } from '@/api/client';
+import api, { orders as ordersApi, payments as paymentsApi, products as productsApi, shipping as shippingApi } from '@/api/client';
 import { Field } from '@/components/ui';
 import {
   formatNairaAmount as formatNaira,
@@ -33,8 +34,11 @@ function unwrapShippingPayload(payload) {
 }
 
 export default function CheckoutPage() {
-  const { items, clear } = useCartStore();
+  const { items, replaceItems, clear } = useCartStore();
   const user = useAuthStore((s) => s.user);
+  const [searchParams] = useSearchParams();
+  const retryOrderId = searchParams.get('retry');
+  const restoredRetryId = useRef(null);
  // const  navigate = useNavigate();
   const [promo, setPromo] = useState('');
   const [promoData, setPromoData] = useState(null);
@@ -60,6 +64,72 @@ export default function CheckoutPage() {
   });
   const city = watch('city');
   const state = watch('state');
+
+  useEffect(() => {
+    if (!retryOrderId || restoredRetryId.current === retryOrderId) return undefined;
+
+    let active = true;
+    async function restorePendingOrder() {
+      try {
+        const { data } = await ordersApi.get(retryOrderId);
+        const body = data?.data ?? data ?? {};
+        const pendingOrder = body.order ?? body;
+
+        if (!active || !Array.isArray(pendingOrder.items)) return;
+
+        const recoveryItems = pendingOrder.items
+          .map((item) => {
+            const product = item.product ?? item.productId ?? item;
+            const productId = product?._id ?? product?.id ?? item.productId;
+            return productId
+              ? { item, product, productId: String(productId), quantity: Number(item.quantity) || 1 }
+              : null;
+          })
+          .filter(Boolean);
+
+        if (recoveryItems.length === 0) {
+          throw new Error('Pending order has no recoverable products');
+        }
+
+        // Fetch current product prices in the product API's base units. Never
+        // copy order snapshot prices here: order/payment values may be stored
+        // in currency minor units, while cart prices use the product contract.
+        const { data: revalidated } = await productsApi.revalidateCart(
+          recoveryItems.map(({ productId }) => productId)
+        );
+        const freshProducts = new Map(
+          (revalidated?.products ?? []).map((product) => [String(product.productId ?? product._id), product])
+        );
+
+        const restoredItems = recoveryItems.map(({ item, product, productId, quantity }) => {
+          const fresh = freshProducts.get(productId);
+          if (!fresh || fresh.available === false || !Number.isFinite(Number(fresh.price))) {
+            throw new Error('A product in this checkout is no longer available');
+          }
+
+          return {
+            ...product,
+            _id: productId,
+            name: item.name ?? product.name,
+            price: Number(fresh.price),
+            stock: fresh.stock,
+            image: item.image ?? product.image,
+            quantity,
+          };
+        });
+
+        if (active) {
+          replaceItems(restoredItems);
+          restoredRetryId.current = retryOrderId;
+        }
+      } catch (err) {
+        if (active) toast.error('We could not restore that checkout. Please start again.');
+      }
+    }
+
+    restorePendingOrder();
+    return () => { active = false; };
+  }, [retryOrderId, replaceItems]);
 
   // Cart items come from Product.price (plain Naira) — see
   // config/cartMoney.js. The backend independently recomputes and

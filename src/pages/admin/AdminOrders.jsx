@@ -7,6 +7,7 @@ import { formatNaira } from '@/config/money';
 import { MapPin, Mail, Pill } from 'lucide-react';
 
 const STATUSES = ['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
+const PAYMENT_STATUSES = ['pending', 'expired', 'completed', 'failed', 'refunded'];
 
 export default function AdminOrders() {
   const [items, setItems]   = useState([]);
@@ -15,6 +16,7 @@ export default function AdminOrders() {
   const [pages, setPages]   = useState(1);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -24,7 +26,13 @@ export default function AdminOrders() {
 
   const fetchOrders = useCallback(() => {
     setLoading(true);
-    ordersApi.all({ page, limit: 8, status: status || undefined, search: search || undefined })
+    ordersApi.all({
+      page,
+      limit: 8,
+      status: status || undefined,
+      paymentStatus: paymentStatus || undefined,
+      search: search || undefined,
+    })
       .then((response) => {
         const body = response?.data?.data ?? response?.data ?? response ?? {};
         const nextItems = body.orders ?? body.items ?? body.results ?? [];
@@ -41,7 +49,7 @@ export default function AdminOrders() {
         setPages(1);
       })
       .finally(() => setLoading(false));
-  }, [page, status, search]);
+  }, [page, status, paymentStatus, search]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -100,6 +108,17 @@ export default function AdminOrders() {
           <option value=''>All Statuses</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+          ))}
+        </select>
+        <select
+          className='admin-input'
+          value={paymentStatus}
+          onChange={(e) => { setPaymentStatus(e.target.value); setPage(1); }}
+          style={{ flex: '0 1 180px' }}
+        >
+          <option value=''>All Payment States</option>
+          {PAYMENT_STATUSES.map((s) => (
+            <option key={s} value={s}>{s === 'completed' ? 'Completed' : s.charAt(0).toUpperCase() + s.slice(1)}</option>
           ))}
         </select>
       </div>
@@ -224,6 +243,35 @@ export default function AdminOrders() {
                 <span>{selected.shippingAddress?.street}, {selected.shippingAddress?.city}, {selected.shippingAddress?.state}</span>
               </div>
             </div>
+
+            {['pending', 'expired', 'failed'].includes(String(selected.paymentStatus).toLowerCase()) && (
+              <div style={{ background: 'rgba(200,133,74,0.1)', border: '1px solid rgba(200,133,74,0.3)', borderRadius: 'var(--radius)', padding: 'var(--space-4)' }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Payment follow-up</div>
+                <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 10 }}>
+                  This payment is {selected.paymentStatus}. Ask the customer whether they encountered a problem during checkout.
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {selected.customerPhone && (
+                    <a
+                      className='btn btn-outline btn-sm'
+                      href={`https://wa.me/${String(selected.customerPhone).replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${selected.customerName || ''}, we noticed your payment for order ${selected.orderNumber || ''} was not completed. Did you encounter a problem during checkout?`)}`}
+                      target='_blank'
+                      rel='noreferrer'
+                    >
+                      WhatsApp customer
+                    </a>
+                  )}
+                  {selected.customerEmail && (
+                    <a
+                      className='btn btn-outline btn-sm'
+                      href={`mailto:${selected.customerEmail}?subject=${encodeURIComponent(`Help with order ${selected.orderNumber || ''}`)}&body=${encodeURIComponent(`Hello ${selected.customerName || ''},\n\nWe noticed your payment for order ${selected.orderNumber || ''} was not completed. Did you encounter a problem during checkout?`)}`}
+                    >
+                      Email customer
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Items */}
             <div>

@@ -22,6 +22,15 @@ import { AlertTriangle, Search, Clock, HeartHandshake } from 'lucide-react';
  */
 
 const STATUS_CONFIG = {
+  pending: {
+    tone: 'neutral',
+    Icon: Clock,
+    title: 'You have an unfinished payment',
+    body: () => (
+      <>Your payment was started but has not been confirmed yet. Continue checkout to complete it, or contact support if you ran into a problem.</>
+    ),
+    cta: { label: 'Continue checkout', to: (order) => `/checkout?retry=${order._id}` },
+  },
   rejected: {
     tone: 'warning',
     Icon: AlertTriangle,
@@ -100,9 +109,16 @@ const TONE_STYLES = {
 export default function PaymentStatusBanner({ order }) {
   if (!order) return null;
 
-  // Overpayment is a separate flag, not a paymentStatus value — the order
-  // IS fulfilled ('completed') in this case, so it renders alongside the
-  // normal order-confirmed view rather than replacing it.
+  const paymentStatus = String(order.paymentStatus ?? '').toLowerCase();
+  const orderStatus = String(order.status ?? '').toLowerCase();
+  const gatewayStatus = String(order.gatewayStatus ?? order.paymentResult?.status ?? '').toLowerCase();
+  const paymentIsSettled =
+    ['completed', 'paid', 'success', 'successful'].includes(paymentStatus) ||
+    ['completed', 'paid', 'processing', 'shipped', 'delivered'].includes(orderStatus) ||
+    ['completed', 'paid', 'success', 'successful'].includes(gatewayStatus);
+
+  if (paymentIsSettled && !order.overpaymentFlag) return null;
+
   if (order.overpaymentFlag) {
     return (
       <div style={bannerStyle(TONE_STYLES.neutral)}>
