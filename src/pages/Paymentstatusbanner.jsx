@@ -7,8 +7,8 @@ import { AlertTriangle, Search, Clock, HeartHandshake } from 'lucide-react';
  * -------------------------------------------------------------------------
  * Drop this into your order-detail / order-status page, passed the order
  * object from GET /api/v1/orders/:id. Renders nothing if the order's
- * payment is in a normal state (pending/completed) — only surfaces when
- * there's something the customer needs to understand.
+ * payment is settled, or shows a neutral confirmation-in-progress notice
+ * while the gateway update is pending.
  *
  * Usage:
  *   <PaymentStatusBanner order={order} />
@@ -25,11 +25,10 @@ const STATUS_CONFIG = {
   pending: {
     tone: 'neutral',
     Icon: Clock,
-    title: 'You have an unfinished payment',
+    title: 'Payment confirmation in progress',
     body: () => (
-      <>Your payment was started but has not been confirmed yet. Continue checkout to complete it, or contact support if you ran into a problem.</>
+      <>The payment provider is still confirming your payment. You don't need to pay again; we'll update your order as soon as confirmation arrives. If the status doesn't update soon, please contact support.</>
     ),
-    cta: { label: 'Continue checkout', to: (order) => `/checkout?retry=${order._id}` },
   },
   rejected: {
     tone: 'warning',
@@ -138,7 +137,7 @@ export default function PaymentStatusBanner({ order }) {
   }
 
   const config = STATUS_CONFIG[order.paymentStatus];
-  if (!config) return null; // pending/completed/failed/refunded — nothing extra to show here
+  if (!config) return null; // No additional notice is needed for this payment status.
 
   const styles = TONE_STYLES[config.tone];
 
