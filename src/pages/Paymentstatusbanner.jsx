@@ -2,24 +2,6 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, Search, Clock, HeartHandshake } from 'lucide-react';
 
-/**
- * PaymentStatusBanner.jsx
- * -------------------------------------------------------------------------
- * Drop this into your order-detail / order-status page, passed the order
- * object from GET /api/v1/orders/:id. Renders nothing if the order's
- * payment is settled, or shows a neutral confirmation-in-progress notice
- * while the gateway update is pending.
- *
- * Usage:
- *   <PaymentStatusBanner order={order} />
- *
- * This exists because the Monnify webhook handler can silently move an
- * order into 'rejected' / 'flagged_underpaid' / 'discrepancy', or set
- * overpaymentFlag, with nothing on the customer-facing side explaining
- * what happened — they'd otherwise just see a stuck "pending" order and
- * have to guess or contact support.
- * -------------------------------------------------------------------------
- */
 
 const STATUS_CONFIG = {
   pending: {
