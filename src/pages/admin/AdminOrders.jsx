@@ -80,6 +80,12 @@ export default function AdminOrders() {
     }
   };
 
+  const paymentFollowUpMessage = selected
+    ? String(selected.paymentStatus).toLowerCase() === 'flagged_underpaid'
+      ? `Hello ${selected.customerName || ''},\n\nWe're following up about payment for order ${selected.orderNumber || ''}. Sometimes a checkout can be interrupted by an unexpected gateway or connection issue. If you completed the payment, please don't pay again; reply with your payment receipt or reference so we can verify it. If you weren't able to complete checkout, let us know and we'll be happy to help.`
+      : `Hello ${selected.customerName || ''},\n\nWe noticed the payment for order ${selected.orderNumber || ''} is still ${selected.paymentStatus}. Did you encounter a problem during checkout? Please let us know if we can help.`
+    : '';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {/* Header */}
@@ -244,17 +250,19 @@ export default function AdminOrders() {
               </div>
             </div>
 
-            {['pending', 'expired', 'failed'].includes(String(selected.paymentStatus).toLowerCase()) && (
+            {['pending', 'expired', 'failed', 'flagged_underpaid'].includes(String(selected.paymentStatus).toLowerCase()) && (
               <div style={{ background: 'rgba(200,133,74,0.1)', border: '1px solid rgba(200,133,74,0.3)', borderRadius: 'var(--radius)', padding: 'var(--space-4)' }}>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>Payment follow-up</div>
                 <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 10 }}>
-                  This payment is {selected.paymentStatus}. Ask the customer whether they encountered a problem during checkout.
+                  {String(selected.paymentStatus).toLowerCase() === 'flagged_underpaid'
+                    ? 'Check whether the customer was interrupted during checkout or has already paid. The message asks them not to pay again if they have.'
+                    : `This payment is ${selected.paymentStatus}. Ask the customer whether they encountered a problem during checkout.`}
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {selected.customerPhone && (
                     <a
                       className='btn btn-outline btn-sm'
-                      href={`https://wa.me/${String(selected.customerPhone).replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${selected.customerName || ''}, we noticed your payment for order ${selected.orderNumber || ''} was not completed. Did you encounter a problem during checkout?`)}`}
+                      href={`https://wa.me/${String(selected.customerPhone).replace(/[^0-9]/g, '')}?text=${encodeURIComponent(paymentFollowUpMessage)}`}
                       target='_blank'
                       rel='noreferrer'
                     >
@@ -264,7 +272,7 @@ export default function AdminOrders() {
                   {selected.customerEmail && (
                     <a
                       className='btn btn-outline btn-sm'
-                      href={`mailto:${selected.customerEmail}?subject=${encodeURIComponent(`Help with order ${selected.orderNumber || ''}`)}&body=${encodeURIComponent(`Hello ${selected.customerName || ''},\n\nWe noticed your payment for order ${selected.orderNumber || ''} was not completed. Did you encounter a problem during checkout?`)}`}
+                      href={`mailto:${selected.customerEmail}?subject=${encodeURIComponent(`Help with order ${selected.orderNumber || ''}`)}&body=${encodeURIComponent(paymentFollowUpMessage)}`}
                     >
                       Email customer
                     </a>
