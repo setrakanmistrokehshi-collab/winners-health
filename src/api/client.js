@@ -253,11 +253,11 @@ export const promoCodes = {
   getDiscount: (code) => api.get(`/promo/${code}`),
   
   // Admin - Manage promo codes
-  list: (params) => api.get('/admin/promo-codes', { params }),
-  create: (data) => api.post('/admin/promo-codes', data),
-  update: (id, data) => api.put(`/admin/promo-codes/${id}`, data),
-  delete: (id) => api.delete(`/admin/promo-codes/${id}`),
-  toggleActive: (id) => api.patch(`/admin/promo-codes/${id}/toggle`),
+  list:         (params) => api.get('/admin/promo-codes', { params }),
+  create:       (data)   => api.post('/admin/promo-codes', data),
+  update:       (id, data) => api.patch(`/admin/promo-codes/${id}`, data),
+  toggleActive: (id)     => api.patch(`/admin/promo-codes/${id}/toggle`),
+  delete:       (id)     => api.delete(`/admin/promo-codes/${id}`),
   getStats: (id) => api.get(`/admin/promo-codes/${id}/stats`),
 };
 
@@ -322,6 +322,9 @@ export const users = {
   
   // Get user's available promo codes
   getAvailablePromoCodes: () => api.get('/users/promo-codes'),
+  // e.g. on orders or payments client 
+validatePromo: (code) =>
+  api.post('/promo-codes/validate', { code }),
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -388,6 +391,26 @@ markNotificationsRead: () => api.patch('/admin/notifications/read-all'),
   monitoring: (windowMinutes = 60) =>
     api.get('/admin/monitoring', { params: { windowMinutes } }),
 
+  // list: GET /admin/promo-codes?page=1&limit=20&active=true
+listPromoCodes: (params = {}) =>
+  api.get('/admin/promo-codes', { params }),
+
+// create
+createPromoCode: (body) =>
+  api.post('/admin/promo-codes', body),
+
+// update
+updatePromoCode: (id, body) =>
+  api.patch(`/admin/promo-codes/${id}`, body),
+
+update: (id, body) => api.put(`/admin/promo-codes/${id}`, body),
+
+// soft-delete / deactivate
+deletePromoCode: (id) =>
+  api.delete(`/admin/promo-codes/${id}`),
+
+toggleActive: (id, isActive) =>
+  api.patch(`/admin/promo-codes/${id}/toggle`, { isActive }),
 };
 
 // ═══════════════════════════════════════════════════════════════════

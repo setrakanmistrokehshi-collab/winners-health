@@ -39,6 +39,7 @@ export default function AdminPromoCodes() {
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
+  
 
   const loadCodes = useCallback(async () => {
     setLoading(true);
@@ -116,12 +117,11 @@ export default function AdminPromoCodes() {
     }
 
     const payload = {
-      code,
-      discountPercent,
-      usageLimit,
-      ...(draft.expiresAt ? { expiresAt: new Date(`${draft.expiresAt}T23:59:59`).toISOString() } : {}),
-    };
-
+     code,
+     discountPercent,
+     usageLimit,
+     expiresAt: draft.expiresAt ? new Date(`${draft.expiresAt}T23:59:59`).toISOString() : null,
+};
     setSaving(true);
     try {
       if (editing === 'new') {
@@ -144,6 +144,7 @@ export default function AdminPromoCodes() {
     const id = item._id ?? item.id;
     setWorkingId(id);
     try {
+      
       await promoCodes.toggleActive(id);
       toast.success(`${item.code} ${item.isActive === false ? 'activated' : 'deactivated'}`);
       await loadCodes();
