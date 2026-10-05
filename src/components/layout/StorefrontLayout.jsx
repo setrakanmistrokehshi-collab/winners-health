@@ -4,6 +4,7 @@ import useAuthStore from '@/context/authStore';
 import useCartStore, { selectCartCount } from '@/context/cartStore';
 import ThemeToggle from '@/components/ThemeToggle';
 import CurrencySwitcher from '@/components/CurrencySwitcher';
+import NotificationBell from '@/components/NotificationBell';
 import toast from 'react-hot-toast';
 import { ShoppingBag, Package, Heart, User, Settings, Leaf } from 'lucide-react';
 
@@ -395,6 +396,7 @@ export default function StorefrontLayout() {
           <div className="sf-actions">
             <CurrencySwitcher />
             <ThemeToggle />
+            {isAuthenticated && <NotificationBell />}
             <Link to="/cart" className="sf-cart" aria-label="Cart">
               <svg
                 width="22"

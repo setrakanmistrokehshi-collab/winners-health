@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 import { auth as authApi, TokenStore } from '@/api/client';
 import { saveReturnPath } from '@/components/ReturnPath';
 import { AUTO_LOGOUT_CONFIG } from '@/config/autoLogout';
+import { loginPush, logoutPush } from '@/lib/onesignal';
 
 const AUTO_LOGOUT_MINUTES = AUTO_LOGOUT_CONFIG.minutes;
 
@@ -40,6 +41,7 @@ const useAuthStore = create(
           isLoading: false,
           error: null,
         });
+        void loginPush(user?._id);
  
         return { success: true, user };
       },
@@ -60,6 +62,7 @@ const useAuthStore = create(
             isLoading: false,
             error: null,
           });
+          void loginPush(data.user?._id);
 
           return { success: true };
         } catch (err) {
@@ -87,6 +90,7 @@ const useAuthStore = create(
             isAuthenticated: true,
             isLoading: false 
           });
+          void loginPush(data.user?._id);
           return {
             success: true, 
             user: data.user 
@@ -131,6 +135,7 @@ const useAuthStore = create(
       },
 
       logout: async () => {
+        void logoutPush();
         // Remember where the user was
         if (typeof window !== 'undefined') {
     saveReturnPath(window.location.pathname + window.location.search);
@@ -264,6 +269,7 @@ const useAuthStore = create(
             isLoading: false,
             error: null,
           });
+          void loginPush(data.user?._id);
         } catch (_) {
 
           saveReturnPath();

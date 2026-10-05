@@ -54,10 +54,6 @@ export function AutoLogoutManager() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    if (window.Notification && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(warningInterval);

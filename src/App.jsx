@@ -27,6 +27,7 @@ import { AutoLogoutCountdown } from './components/AutoLogoutCountdown';
 import CookieConsentBanner, { getConsent } from '@/components/CookieConsentBanner';
 import { initIfConsented } from '@/lib/metaPixel';
 import useCurrencyStore from '@/context/currencyStore';
+import { initPush } from '@/lib/onesignal';
 
 // Pages (storefront)
 import HomePage from '@/pages/HomePage';
@@ -162,6 +163,7 @@ const router = createBrowserRouter([
         element: <RequireAuth />,
         children: [
           { path: 'checkout', element: <CheckoutPage /> },
+          { path: 'orders/:id', element: <OrdersPage /> },
           { path: 'orders', element: <OrdersPage /> },
           { path: 'order-success', element: <OrderSuccessPage /> },
           { path: 'profile', element: <ProfilePage /> },
@@ -198,6 +200,7 @@ const router = createBrowserRouter([
           { path: 'analytics', element: <AdminAnalytics /> },
           { path: 'products', element: <AdminProducts /> },
           { path: 'products/add', element: <AddProduct /> },
+          { path: 'orders/:id', element: <AdminOrders /> },
           { path: 'orders', element: <AdminOrders /> },
           { path: 'orders-list', element: <Orders /> },
           { path: 'users', element: <AdminUsers /> },
@@ -228,6 +231,7 @@ export default function App() {
   const fetchCurrencies = useCurrencyStore((s) => s.fetchCurrencies);
 
   useEffect(() => {
+    void initPush();
     fetchMe();
 
     const handler = () => {

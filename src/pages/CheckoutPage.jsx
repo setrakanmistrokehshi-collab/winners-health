@@ -16,6 +16,12 @@ import PriceTag from '@/components/PriceTag';
 import useRevalidateCart from '@/hooks/useRevalidateCart';
 import useCurrencyStore from '@/context/currencyStore';
 import GatewayPicker from '@/components/GatewayPicker';
+import {
+  getPushPermissionState,
+  isIOSInstallRequired,
+  isPushConfigured,
+  requestPushPermission,
+} from '@/lib/onesignal';
 
 const GATEWAY_LABELS = { monnify: 'Monnify', paystack: 'Paystack', nomba: 'Nomba' };
 
@@ -44,6 +50,8 @@ export default function CheckoutPage() {
   const [promoData, setPromoData] = useState(null);
   const [checkingPromo, setCheckingPromo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [notifyOrderUpdates, setNotifyOrderUpdates] = useState(true);
+  const [pushPermissionHint, setPushPermissionHint] = useState('');
   const [gateway, setGateway] = useState('monnify');
   const [shippingQuote, setShippingQuote] = useState(null);
   const [shippingQuoteLoading, setShippingQuoteLoading] = useState(false);
@@ -281,8 +289,41 @@ export default function CheckoutPage() {
         : 'Enter your city or state to calculate shipping');
       return;
     }
+
+    setPushPermissionHint('');
+    let permissionRequest;
+    if (isPushConfigured() && notifyOrderUpdates && getPushPermissionState() !== 'granted') {
+      if (isIOSInstallRequired()) {
+        setPushPermissionHint('On iPhone, tap Share, then Add to Home Screen to enable notifications.');
+      } else {
+        permissionRequest = requestPushPermission();
+      }
+    }
+
     setSubmitting(true);
     try {
+      if (permissionRequest) {
+        let permissionTimeout;
+        const permissionResult = await Promise.race([
+          permissionRequest,
+          new Promise((resolve) => {
+            permissionTimeout = setTimeout(() => resolve('timeout'), 1200);
+          }),
+        ]);
+        clearTimeout(permissionTimeout);
+
+        if (permissionResult === 'denied' || getPushPermissionState() === 'denied') {
+          setPushPermissionHint('Notifications are blocked. Use the lock icon in the address bar, then Notifications, to re-enable them.');
+        }
+        if (permissionResult === 'timeout') {
+          void permissionRequest.then((permission) => {
+            if (permission === 'denied') {
+              setPushPermissionHint('Notifications are blocked. Use the lock icon in the address bar, then Notifications, to re-enable them.');
+            }
+          });
+        }
+      }
+
      const payload = {
   items: items.map((i) => ({ productId: i._id, quantity: i.quantity })),
   customer: {                         
@@ -447,6 +488,23 @@ export default function CheckoutPage() {
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--forest)', marginBottom: 8 }}>Payment method</div>
                   <GatewayPicker value={gateway} onChange={setGateway} />
                 </div>
+
+                {isPushConfigured() && (
+                  <div className='checkout-notify'>
+                    <label className='checkout-notify-label'>
+                      <input
+                        type='checkbox'
+                        checked={notifyOrderUpdates}
+                        onChange={(event) => setNotifyOrderUpdates(event.target.checked)}
+                      />
+                      <span>Notify me instantly about this order and future orders</span>
+                    </label>
+                    <p className='checkout-notify-description'>Includes payment confirmation and shipping updates.</p>
+                    {pushPermissionHint && (
+                      <p className='checkout-notify-hint' role='status'>{pushPermissionHint}</p>
+                    )}
+                  </div>
+                )}
 
                 <button
                   type='submit'

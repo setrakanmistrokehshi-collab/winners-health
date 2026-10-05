@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { orders as ordersApi, admin as adminApi } from '@/api/client';
+import { getAdminOrderById } from '@/api/adminApi';
 import { OrderStatusBadge, Modal, Pagination } from '@/components/ui';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -10,6 +12,8 @@ const STATUSES = ['pending', 'paid', 'processing', 'shipped', 'delivered', 'canc
 const PAYMENT_STATUSES = ['pending', 'expired', 'completed', 'failed', 'refunded'];
 
 export default function AdminOrders() {
+  const { id: routeOrderId } = useParams();
+  const navigate = useNavigate();
   const [items, setItems]   = useState([]);
   const [total, setTotal]   = useState(0);
   const [page, setPage]     = useState(1);
@@ -52,6 +56,26 @@ export default function AdminOrders() {
   }, [page, status, paymentStatus, search]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  useEffect(() => {
+    if (!routeOrderId) return undefined;
+    let mounted = true;
+
+    getAdminOrderById(routeOrderId)
+      .then((response) => {
+        if (!mounted) return;
+        const payload = response?.data?.data ?? response?.data ?? response ?? {};
+        const order = payload.order ?? payload;
+        setSelected(order);
+        setNewStatus(order.status ?? '');
+        setStatusNote('');
+      })
+      .catch(() => {
+        if (mounted) toast.error('Could not load this order.');
+      });
+
+    return () => { mounted = false; };
+  }, [routeOrderId]);
 
   const handleStatusUpdate = async () => {
     if (!newStatus || !selected) return;
@@ -221,7 +245,15 @@ export default function AdminOrders() {
       </div>
 
       {/* Order Detail Modal */}
-      <Modal open={!!selected} onClose={() => setSelected(null)} title={`Order ${selected?.orderNumber}`} maxWidth={600}>
+      <Modal
+        open={!!selected}
+        onClose={() => {
+          setSelected(null);
+          if (routeOrderId) navigate('/admin/orders', { replace: true });
+        }}
+        title={`Order ${selected?.orderNumber}`}
+        maxWidth={600}
+      >
         {selected && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
             {/* Summary row */}

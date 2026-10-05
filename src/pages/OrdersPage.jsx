@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { orders as ordersApi } from '@/api/client';
 import { PageLoader, EmptyState, OrderStatusBadge, Modal, Pagination } from '@/components/ui';
 import PaymentStatusBanner from '@/pages/Paymentstatusbanner';
@@ -12,6 +12,8 @@ import PriceTag from '@/components/PriceTag';
 const PAGE_SIZE = 10;
 
 export default function OrdersPage() {
+  const { id: routeOrderId } = useParams();
+  const navigate = useNavigate();
   const [orderList, setOrderList] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [selected, setSelected]   = useState(null);
@@ -50,6 +52,23 @@ export default function OrdersPage() {
     loadOrders();
     return () => { mounted = false; };
   }, [page]);
+
+  useEffect(() => {
+    if (!routeOrderId) return undefined;
+    let mounted = true;
+
+    ordersApi.get(routeOrderId)
+      .then(({ data }) => {
+        if (!mounted) return;
+        const payload = data?.data ?? data ?? {};
+        setSelected(payload.order ?? payload);
+      })
+      .catch(() => {
+        if (mounted) toast.error('Could not load this order.');
+      });
+
+    return () => { mounted = false; };
+  }, [routeOrderId]);
 
   const handleCancel = async (id) => {
     if (!confirm('Cancel this order?')) return;
@@ -165,7 +184,15 @@ export default function OrdersPage() {
       </div>
 
       {/* Order detail modal */}
-      <Modal open={!!selected} onClose={() => setSelected(null)} title={`Order ${selected?.orderNumber}`} maxWidth={580}>
+      <Modal
+        open={!!selected}
+        onClose={() => {
+          setSelected(null);
+          if (routeOrderId) navigate('/orders', { replace: true });
+        }}
+        title={`Order ${selected?.orderNumber}`}
+        maxWidth={580}
+      >
         {selected && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
             {/* Status timeline */}
