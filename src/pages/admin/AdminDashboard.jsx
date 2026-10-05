@@ -19,6 +19,86 @@ const PERIOD_MAP = {
 
 const COLORS = ['#00c896', '#7c5cfc', '#f59e0b', '#ff4d6d', '#7a9e7e', '#c8854a'];
 
+// ─────────────────────────────────────────────────────────────────
+// MONEY UNITS
+// Set to 100 ONLY if your database stores order totals in kobo.
+// Set to 1 if totals are stored in naira (Monnify takes naira, so this is the
+// usual case). Every amount on this page goes through toNaira(), so this is
+// the one place to change it.
+// ─────────────────────────────────────────────────────────────────
+const AMOUNT_DIVISOR = 100;
+
+const toNaira = (v) => (Number(v) || 0) / AMOUNT_DIVISOR;
+
+const compactFmt = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+const fullFmt = new Intl.NumberFormat('en-NG', { maximumFractionDigits: 0 });
+
+/** ₦45,230  |  ₦1.2M  |  ₦4.6T — thousands separators below 1M, compact above */
+function formatNaira(n) {
+  const v = Number(n) || 0;
+  if (Math.abs(v) >= 1_000_000) return `₦${compactFmt.format(v)}`;
+  return `₦${fullFmt.format(v)}`;
+}
+
+/** Always the complete figure, e.g. ₦4,599,937,100,000 (for tooltips and the table) */
+function formatNairaFull(n) {
+  return `₦${fullFmt.format(Number(n) || 0)}`;
+}
+
+/** Chart axis ticks: ₦500, ₦12K, ₦3.4M */
+function formatNairaTick(v) {
+  const n = Number(v) || 0;
+  return `₦${Math.abs(n) >= 1000 ? compactFmt.format(n) : n}`;
+}
+
+function formatCount(n) {
+  const v = Number(n) || 0;
+  return Math.abs(v) >= 10_000 ? compactFmt.format(v) : fullFmt.format(v);
+}
+
+function cap(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+}
+function unwrapEnvelope(res, fallback) {
+  return res?.data?.data ?? res?.data ?? res ?? fallback;
+}
+
+/**
+ * Turns a KPI from the backend into { value, full, delta, up }.
+ * Accepts a plain number, a numeric string, a preformatted string, or an
+ * object like { value } / { total, growth } / { value, delta, up }.
+ */
+function resolveKpi(raw, { money, fallbackDelta = null, fallbackUp = true }) {
+  const isObj = raw !== null && typeof raw === 'object';
+  const base = isObj ? (raw.value ?? raw.total ?? raw.amount ?? 0) : raw;
+
+  let delta = isObj ? (raw.delta ?? null) : fallbackDelta;
+  let up = isObj ? (raw.up ?? fallbackUp) : fallbackUp;
+  if (isObj && delta == null && raw.growth != null) {
+    delta = `${raw.growth}%`;
+    up = Number(raw.growth) >= 0;
+  }
+
+  
+  if (typeof base === 'string') {
+    const numeric = Number(base.replace(/[₦,\s]/g, ''));
+    if (!Number.isFinite(numeric)) return { value: base, full: base, delta, up };
+    return build(numeric);
+  }
+  return build(base);
+
+  function build(num) {
+    if (money) {
+      const naira = toNaira(num);
+      return { value: formatNaira(naira), full: formatNairaFull(naira), delta, up };
+    }
+    return { value: formatCount(num), full: fullFmt.format(Number(num) || 0), delta, up };
+  }
+}
+
 const nairaTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -36,37 +116,12 @@ const nairaTooltip = ({ active, payload, label }) => {
             width: 8, height: 8, borderRadius: '50%',
             background: p.color, display: 'inline-block',
           }} />
-          {p.name}: ₦{Number(p.value || 0).toLocaleString()}
+          {p.name}: {formatNairaFull(p.value)}
         </div>
       ))}
     </div>
   );
 };
-
-function formatNaira(n) {
-  const v = Number(n) || 0;
-  if (v >= 1_000_000) return `₦${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `₦${(v / 1_000).toFixed(1)}K`;
-  return `₦${v.toLocaleString()}`;
-}
-
-function formatCount(n) {
-  const v = Number(n) || 0;
-  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
-  return String(v);
-}
-
-function cap(s) {
-  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
-}
-
-// api/client.js's response shape is inconsistent across endpoints —
-// some handlers return the raw axios response, some pre-unwrap with
-// .then(r => r.data). This cascade handles both without guessing
-// which one a given call returns.
-function unwrapEnvelope(res, fallback) {
-  return res?.data?.data ?? res?.data ?? res ?? fallback;
-}
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -108,29 +163,50 @@ export default function AdminDashboard() {
   }, [load]);
 
   // Normalized KPI fields — support multiple backend response shapes
-  // without silently defaulting live numbers to zero
-  const revenue = stats?.revenue ?? stats?.totalRevenue ?? 0;
-  const revenueDelta = stats?.revenueDelta ?? stats?.revenue?.delta ?? null;
-  const revenueUp = stats?.revenueUp ?? stats?.revenue?.up ?? true;
+  const rawRevenue = stats?.revenue ?? stats?.totalRevenue ?? 0;
+  const rawOrdersCount = stats?.orders ?? stats?.totalOrders ?? 0;
+  const rawCustomers = stats?.customers ?? stats?.activeCustomers ?? stats?.totalCustomers ?? 0;
+  const rawOutOfStock = stats?.outOfStock ?? stats?.outOfStockCount ?? 0;
 
-  const ordersCount = stats?.orders ?? stats?.totalOrders ?? 0;
-  const ordersDelta = stats?.ordersDelta ?? stats?.orders?.delta ?? null;
-  const ordersUp = stats?.ordersUp ?? stats?.orders?.up ?? true;
+  const revenueKpi = resolveKpi(rawRevenue, {
+    money: true,
+    fallbackDelta: stats?.revenueDelta ?? null,
+    fallbackUp: stats?.revenueUp ?? true,
+  });
+  const ordersKpi = resolveKpi(rawOrdersCount, {
+    money: false,
+    fallbackDelta: stats?.ordersDelta ?? null,
+    fallbackUp: stats?.ordersUp ?? true,
+  });
+  const customersKpi = resolveKpi(rawCustomers, {
+    money: false,
+    fallbackDelta: stats?.customersDelta ?? null,
+    fallbackUp: stats?.customersUp ?? true,
+  });
+  const outOfStockKpi = resolveKpi(rawOutOfStock, { money: false, fallbackUp: false });
 
-  const customers = stats?.customers ?? stats?.activeCustomers ?? stats?.totalCustomers ?? 0;
-  const customersDelta = stats?.customersDelta ?? stats?.customers?.delta ?? null;
-  const customersUp = stats?.customersUp ?? stats?.customers?.up ?? true;
-
-  const outOfStock = stats?.outOfStock ?? stats?.outOfStockCount ?? 0;
   const pendingOrders = stats?.pendingOrders ?? stats?.pending ?? 0;
   const cancelled = stats?.cancelled ?? stats?.cancelledOrders ?? 0;
   const netProfit = stats?.netProfit ?? 0;
   const margin = stats?.margin ?? stats?.profitMargin ?? null;
 
-  const salesData = stats?.salesChart ?? stats?.sales ?? stats?.dailySales ?? [];
+  const salesData = (stats?.salesChart ?? stats?.sales ?? stats?.dailySales ?? []).map((d) => ({
+    ...d,
+    thisWeek: toNaira(d.thisWeek),
+    lastWeek: toNaira(d.lastWeek),
+  }));
   const catData = stats?.categoryBreakdown ?? stats?.categories ?? [];
   const topProds = stats?.topProducts ?? [];
-  const inventory = stats?.inventory ?? stats?.lowStock ?? [];
+
+  // Compute inventory status once so the "Low" count always matches the rows
+  const inventory = (stats?.inventory ?? stats?.lowStock ?? []).map((item) => {
+    const max = item.max || item.capacity || 100;
+    const stock = item.stock ?? 0;
+    const pct = Math.min(100, Math.round((stock / max) * 100));
+    const alert = item.alert ?? pct < 25;
+    return { ...item, stock, pct, alert };
+  });
+  const lowCount = inventory.filter((i) => i.alert).length;
 
   const pieData = catData.map((entry, i) => ({
     ...entry,
@@ -188,36 +264,28 @@ export default function AdminDashboard() {
           Icon={Wallet}
           label="Total Revenue"
           bg="rgba(0,200,150,.12)"
-          value={typeof revenue === 'object' ? revenue.value : formatNaira(revenue)}
-          delta={typeof revenue === 'object' ? revenue.delta : revenueDelta}
-          up={typeof revenue === 'object' ? revenue.up : revenueUp}
+          kpi={revenueKpi}
           sub="vs previous period"
         />
         <KpiCard
           Icon={ShoppingCart}
           label="Total Orders"
           bg="rgba(124,92,252,.12)"
-          value={typeof ordersCount === 'object' ? ordersCount.value : formatCount(ordersCount)}
-          delta={typeof ordersCount === 'object' ? ordersCount.delta : ordersDelta}
-          up={typeof ordersCount === 'object' ? ordersCount.up : ordersUp}
+          kpi={ordersKpi}
           sub="vs previous period"
         />
         <KpiCard
           Icon={Users}
           label="Active Customers"
           bg="rgba(245,158,11,.12)"
-          value={typeof customers === 'object' ? customers.value : formatCount(customers)}
-          delta={typeof customers === 'object' ? customers.delta : customersDelta}
-          up={typeof customers === 'object' ? customers.up : customersUp}
+          kpi={customersKpi}
           sub="vs previous period"
         />
         <KpiCard
           Icon={PackageX}
           label="Out of Stock"
           bg="rgba(255,77,109,.12)"
-          value={typeof outOfStock === 'object' ? outOfStock.value : String(outOfStock)}
-          delta={typeof outOfStock === 'object' ? outOfStock.delta : null}
-          up={false}
+          kpi={{ ...outOfStockKpi, up: false }}
           sub="need restock"
         />
       </div>
@@ -258,7 +326,8 @@ export default function AdminDashboard() {
                   tick={{ fill: 'var(--admin-muted)', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(v) => `₦${(v / 1000).toFixed(0)}K`}
+                  width={56}
+                  tickFormatter={formatNairaTick}
                 />
                 <Tooltip content={nairaTooltip} />
                 <Area
@@ -297,23 +366,23 @@ export default function AdminDashboard() {
           </div>
           {catData.length > 0 ? (
             <>
-            <ResponsiveContainer width="100%" height={160}>
-        <PieChart>
-    <Pie
-      data={pieData}
-      cx="50%"
-      cy="50%"
-      innerRadius={45}
-      outerRadius={72}
-      dataKey="value"
-      nameKey="name"
-      paddingAngle={3}
-      stroke="transparent"
-    />
-    <Tooltip formatter={(v, n) => [`${v}%`, n]} />
-  </PieChart>
-</ResponsiveContainer>
-              
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={45}
+                    outerRadius={72}
+                    dataKey="value"
+                    nameKey="name"
+                    paddingAngle={3}
+                    stroke="transparent"
+                  />
+                  <Tooltip formatter={(v, n) => [`${v}%`, n]} />
+                </PieChart>
+              </ResponsiveContainer>
+
               <div style={{ marginTop: 8 }}>
                 {catData.map((c, i) => (
                   <div
@@ -345,12 +414,13 @@ export default function AdminDashboard() {
       </div>
 
       <div className="stats-strip">
-        <StatStrip Icon={Inbox} label="Pending Orders" value={pendingOrders} color="var(--warning)" sub="Awaiting fulfillment" />
-        <StatStrip Icon={XCircle} label="Cancelled" value={cancelled} color="var(--error)" sub="This period" />
+        <StatStrip Icon={Inbox} label="Pending Orders" value={formatCount(pendingOrders)} color="var(--warning)" sub="Awaiting fulfillment" />
+        <StatStrip Icon={XCircle} label="Cancelled" value={formatCount(cancelled)} color="var(--error)" sub="This period" />
         <StatStrip
           Icon={TrendingUp}
           label="Net Profit"
-          value={formatNaira(netProfit)}
+          value={formatNaira(toNaira(netProfit))}
+          title={formatNairaFull(toNaira(netProfit))}
           color="var(--admin-accent)"
           sub={margin != null ? `Margin: ${margin}` : '—'}
         />
@@ -405,11 +475,11 @@ export default function AdminDashboard() {
                       <td
                         style={{
                           fontFamily: 'var(--font-mono)',
+                          whiteSpace: 'nowrap',
                           color: o.status === 'cancelled' ? 'var(--admin-muted)' : 'var(--admin-accent)',
                         }}
                       >
-                       
-                        ₦{(Number(o.total ?? o.totalPrice ?? 0) / 100).toLocaleString()}
+                        {formatNairaFull(toNaira(o.total ?? o.totalPrice ?? 0))}
                       </td>
                     </tr>
                   ))}
@@ -483,10 +553,12 @@ export default function AdminDashboard() {
                       {p.category ?? '—'}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--admin-accent)' }}>
                       {p.revenue != null
-                        ? (typeof p.revenue === 'string' ? p.revenue : formatNaira(p.revenue))
+                        ? (typeof p.revenue === 'string' && !Number.isFinite(Number(p.revenue))
+                          ? p.revenue
+                          : formatNaira(toNaira(p.revenue)))
                         : '—'}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--admin-muted)' }}>
@@ -514,15 +586,12 @@ export default function AdminDashboard() {
                 borderRadius: 20,
                 fontWeight: 600,
               }}>
-                {inventory.filter((i) => i.alert || i.stock < (i.max || 0) * 0.25).length} Low
+                {lowCount} Low
               </span>
             </div>
             {inventory.length > 0 ? (
               inventory.map((item, i) => {
-                const max = item.max || item.capacity || 100;
-                const stock = item.stock ?? 0;
-                const pct = Math.min(100, Math.round((stock / max) * 100));
-                const alert = item.alert ?? pct < 25;
+                const { stock, pct, alert } = item;
                 const color = alert ? (pct < 20 ? 'var(--error)' : 'var(--warning)') : 'var(--admin-accent)';
                 return (
                   <div
@@ -535,7 +604,7 @@ export default function AdminDashboard() {
                       borderBottom: i < inventory.length - 1 ? '1px solid var(--admin-border)' : 'none',
                     }}
                   >
-                    <div style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--admin-text)' }}>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 500, color: 'var(--admin-text)' }}>
                       {item.name}
                     </div>
                     <div style={{ width: 80 }}>
@@ -580,16 +649,29 @@ function Empty({ children }) {
   );
 }
 
-function KpiCard({ Icon, label, bg, value, delta, up, sub }) {
+function KpiCard({ Icon, label, bg, kpi, sub }) {
+  const { value, full, delta, up } = kpi;
   return (
-    <div className="kpi-card">
+    // minWidth/overflow stop grid children from being pushed wider than their column
+    <div className="kpi-card" style={{ minWidth: 0, overflow: 'hidden' }}>
       <div className="kpi-label">
         <div className="kpi-icon" style={{ background: bg }}>
           {Icon && <Icon size={16} strokeWidth={1.8} aria-hidden="true" />}
         </div>
         {label}
       </div>
-      <div className="kpi-value">{value ?? '—'}</div>
+      <div
+        className="kpi-value"
+        title={full}
+        style={{
+          fontSize: 'clamp(1.15rem, 5vw, 1.75rem)',
+          lineHeight: 1.2,
+          maxWidth: '100%',
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {value ?? '—'}
+      </div>
       {delta != null && (
         <div className={`kpi-delta ${up ? 'up' : 'down'}`}>
           {up
@@ -603,20 +685,29 @@ function KpiCard({ Icon, label, bg, value, delta, up, sub }) {
   );
 }
 
-function StatStrip({ Icon, label, value, color, sub }) {
+function StatStrip({ Icon, label, value, title, color, sub }) {
   return (
-    <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+    <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, flexShrink: 0 }}>
         {Icon && <Icon size={28} strokeWidth={1.6} color={color} aria-hidden="true" />}
       </div>
-      <div>
+      <div style={{ minWidth: 0 }}>
         <div style={{
           fontSize: 11, color: 'var(--admin-muted)', textTransform: 'uppercase',
           letterSpacing: '.6px', marginBottom: 4,
         }}>
           {label}
         </div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 500, color }}>
+        <div
+          title={title}
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 'clamp(1.2rem, 5vw, 1.75rem)',
+            fontWeight: 500,
+            color,
+            overflowWrap: 'anywhere',
+          }}
+        >
           {value ?? '—'}
         </div>
         <div style={{ fontSize: 11, color: 'var(--admin-muted)' }}>{sub}</div>
