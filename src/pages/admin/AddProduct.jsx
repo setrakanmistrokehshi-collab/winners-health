@@ -20,14 +20,13 @@ export default function AddProduct() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState(EMPTY);
-  const [files, setFiles] = useState([]);           // new files to upload
-  const [previews, setPreviews] = useState([]);     // local previews
-  const [existingImages, setExistingImages] = useState([]); // already on server
+  const [files, setFiles] = useState([]);
+  const [previews, setPreviews] = useState([]);
+  const [existingImages, setExistingImages] = useState([]);
   const [saving, setSaving] = useState(false);
   const [drag, setDrag] = useState(false);
   const [loading, setLoading] = useState(isEdit);
 
-  // Load product when editing
   useEffect(() => {
     if (!isEdit) return;
 
@@ -66,7 +65,6 @@ export default function AddProduct() {
     setForm((f) => ({ ...f, [k]: v }));
   }
 
-  // ✅ Append files instead of replacing
   function handleFiles(fileList) {
     const incoming = Array.from(fileList);
     const remainingSlots = 5 - files.length;
@@ -116,8 +114,6 @@ export default function AddProduct() {
         isActive: status === 'active',
       };
 
-      // ⚠️ Do NOT send images in this payload.
-      // Images are handled only by the dedicated upload endpoint.
       delete payload.images;
 
       let saved;
@@ -129,7 +125,6 @@ export default function AddProduct() {
         toast.success('Product created');
       }
 
-      // Robust productId extraction
       const productId =
         saved?.data?.product?._id ||
         saved?.product?._id ||
@@ -141,10 +136,8 @@ export default function AddProduct() {
         const uploadToast = toast.loading(`Uploading ${files.length} image(s)…`);
         try {
           const fd = new FormData();
-          files.forEach((f) => fd.append('images', f)); // field name must be "images"
-          const uploadRes = await uploadProductImage(productId, fd);
-
-          console.log('Upload response:', uploadRes); // check this in console
+          files.forEach((f) => fd.append('images', f));
+          await uploadProductImage(productId, fd);
           toast.success(`${files.length} image(s) uploaded`, { id: uploadToast });
         } catch (uploadErr) {
           console.error('Image upload error:', uploadErr);
@@ -169,52 +162,140 @@ export default function AddProduct() {
 
   return (
     <>
-      <div className="page-header">
+      <style>{`
+        .add-product-layout {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 20px;
+          align-items: start;
+        }
+        .add-product-pricing {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 12px;
+        }
+        .add-product-header {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          align-items: center;
+          justify-content: space-between;
+        }
+        @media (min-width: 900px) {
+          .add-product-layout {
+            grid-template-columns: 1fr 320px;
+          }
+          .add-product-pricing {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+      `}</style>
+
+      <div className="page-header add-product-header">
         <div>
           <h1>{isEdit ? 'Edit Product' : 'Add Product'}</h1>
           <p>{isEdit ? `Editing product #${id}` : 'Create a new product listing'}</p>
         </div>
-        <button className="btn btn-ghost" onClick={() => navigate('/admin/products')}>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => navigate('/admin/products')}
+        >
           ← Back
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, alignItems: 'start' }}>
-        {/* LEFT — form fields (same as before) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="add-product-layout">
+        {/* Form column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
           <div className="card">
             <div className="card-title" style={{ marginBottom: 16 }}>Product Information</div>
-            <Field label="Product Name *" value={form.name} onChange={(v) => set('name', v)} placeholder="e.g. Greens Plus Daily Formula" />
-            <Field label="Short Description *" value={form.shortDescription} onChange={(v) => set('shortDescription', v)} placeholder="One-line summary" />
+            <Field
+              label="Product Name *"
+              value={form.name}
+              onChange={(v) => set('name', v)}
+              placeholder="e.g. Greens Plus Daily Formula"
+            />
+            <Field
+              label="Short Description *"
+              value={form.shortDescription}
+              onChange={(v) => set('shortDescription', v)}
+              placeholder="One-line summary"
+            />
             <div className="form-field">
               <label>Full Description</label>
-              <textarea rows={4} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Detailed description…" />
+              <textarea
+                rows={4}
+                value={form.description}
+                onChange={(e) => set('description', e.target.value)}
+                placeholder="Detailed description…"
+                style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+              />
             </div>
-            <Field label="Ingredients (comma separated)" value={form.ingredients} onChange={(v) => set('ingredients', v)} />
-            <Field label="Benefits (comma separated)" value={form.benefits} onChange={(v) => set('benefits', v)} />
-            <Field label="How To Use" value={form.howToUse} onChange={(v) => set('howToUse', v)} />
+            <Field
+              label="Ingredients (comma separated)"
+              value={form.ingredients}
+              onChange={(v) => set('ingredients', v)}
+            />
+            <Field
+              label="Benefits (comma separated)"
+              value={form.benefits}
+              onChange={(v) => set('benefits', v)}
+            />
+            <Field
+              label="How To Use"
+              value={form.howToUse}
+              onChange={(v) => set('howToUse', v)}
+            />
           </div>
 
           <div className="card">
             <div className="card-title" style={{ marginBottom: 16 }}>Pricing & Stock</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Price (₦) *" value={form.price} onChange={(v) => set('price', v)} type="number" />
-              <Field label="Original Price (₦)" value={form.originalPrice} onChange={(v) => set('originalPrice', v)} type="number" />
-              <Field label="Stock Quantity *" value={form.stock} onChange={(v) => set('stock', v)} type="number" />
-              <Field label="Servings Per Pack" value={form.servings} onChange={(v) => set('servings', v)} type="number" />
+            <div className="add-product-pricing">
+              <Field
+                label="Price (₦) *"
+                value={form.price}
+                onChange={(v) => set('price', v)}
+                type="number"
+              />
+              <Field
+                label="Original Price (₦)"
+                value={form.originalPrice}
+                onChange={(v) => set('originalPrice', v)}
+                type="number"
+              />
+              <Field
+                label="Stock Quantity *"
+                value={form.stock}
+                onChange={(v) => set('stock', v)}
+                type="number"
+              />
+              <Field
+                label="Servings Per Pack"
+                value={form.servings}
+                onChange={(v) => set('servings', v)}
+                type="number"
+              />
             </div>
           </div>
 
           <div className="card">
             <div className="card-title" style={{ marginBottom: 16 }}>Tags & Compliance</div>
-            <Field label="Tags (comma separated)" value={form.tags} onChange={(v) => set('tags', v)} />
-            <Field label="NAFDAC Number" value={form.nafdac} onChange={(v) => set('nafdac', v)} />
+            <Field
+              label="Tags (comma separated)"
+              value={form.tags}
+              onChange={(v) => set('tags', v)}
+            />
+            <Field
+              label="NAFDAC Number"
+              value={form.nafdac}
+              onChange={(v) => set('nafdac', v)}
+            />
           </div>
         </div>
 
-        {/* RIGHT */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Images */}
+        {/* Sidebar — stacks under form on mobile */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
           <div className="card">
             <div className="card-title" style={{ marginBottom: 14 }}>
               Product Images
@@ -224,10 +305,17 @@ export default function AddProduct() {
             </div>
 
             <div
-              onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDrag(true);
+              }}
               onDragLeave={() => setDrag(false)}
-              onDrop={(e) => { e.preventDefault(); setDrag(false); handleFiles(e.dataTransfer.files); }}
-              onClick={() => document.getElementById('file-input').click()}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDrag(false);
+                handleFiles(e.dataTransfer.files);
+              }}
+              onClick={() => document.getElementById('file-input')?.click()}
               style={{
                 border: `2px dashed ${drag ? 'var(--accent)' : 'var(--border)'}`,
                 borderRadius: 10,
@@ -241,7 +329,9 @@ export default function AddProduct() {
                 <ImagePlus size={26} strokeWidth={1.6} color="var(--muted)" aria-hidden="true" />
               </div>
               <div style={{ fontSize: 13, fontWeight: 600 }}>Drop images or click to browse</div>
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>JPEG, PNG, WebP · Max 5MB · Up to 5 new</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                JPEG, PNG, WebP · Max 5MB · Up to 5 new
+              </div>
             </div>
 
             <input
@@ -253,13 +343,33 @@ export default function AddProduct() {
               onChange={(e) => handleFiles(e.target.files)}
             />
 
-            {/* Existing + new previews */}
             {(existingImages.length > 0 || previews.length > 0) && (
               <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {existingImages.map((src, i) => (
                   <div key={`exist-${i}`} style={{ position: 'relative', width: 72, height: 72 }}>
-                    <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />
-                    <span style={{ position: 'absolute', bottom: 2, left: 2, fontSize: 9, background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '1px 4px', borderRadius: 3 }}>
+                    <img
+                      src={src}
+                      alt=""
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: 2,
+                        left: 2,
+                        fontSize: 9,
+                        background: 'rgba(0,0,0,0.6)',
+                        color: '#fff',
+                        padding: '1px 4px',
+                        borderRadius: 3,
+                      }}
+                    >
                       SAVED
                     </span>
                   </div>
@@ -267,20 +377,53 @@ export default function AddProduct() {
 
                 {previews.map((src, i) => (
                   <div key={`new-${i}`} style={{ position: 'relative', width: 72, height: 72 }}>
-                    <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />
-                    <button
-                      onClick={(e) => { e.stopPropagation(); removeFile(i); }}
+                    <img
+                      src={src}
+                      alt=""
                       style={{
-                        position: 'absolute', top: -6, right: -6,
-                        width: 20, height: 20, borderRadius: '50%',
-                        background: '#f87171', color: '#fff', border: 'none',
-                        cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFile(i);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: -6,
+                        right: -6,
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        background: '#f87171',
+                        color: '#fff',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                        fontWeight: 700,
                       }}
                     >
                       ×
                     </button>
                     {i === 0 && existingImages.length === 0 && (
-                      <span style={{ position: 'absolute', bottom: 2, left: 2, fontSize: 9, background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '1px 4px', borderRadius: 3 }}>
+                      <span
+                        style={{
+                          position: 'absolute',
+                          bottom: 2,
+                          left: 2,
+                          fontSize: 9,
+                          background: 'rgba(0,0,0,0.6)',
+                          color: '#fff',
+                          padding: '1px 4px',
+                          borderRadius: 3,
+                        }}
+                      >
                         MAIN
                       </span>
                     )}
@@ -290,41 +433,77 @@ export default function AddProduct() {
             )}
 
             {previews.length > 0 && (
-              <button className="btn btn-ghost" style={{ width: '100%', marginTop: 8, fontSize: 12 }} onClick={clearNewFiles}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ width: '100%', marginTop: 8, fontSize: 12 }}
+                onClick={clearNewFiles}
+              >
                 Clear new images
               </button>
             )}
           </div>
 
-          {/* Category & Badge */}
           <div className="card">
             <div className="card-title" style={{ marginBottom: 14 }}>Category & Badge</div>
             <div className="form-field">
               <label>Category</label>
-              <select value={form.category} onChange={(e) => set('category', e.target.value)}>
+              <select
+                value={form.category}
+                onChange={(e) => set('category', e.target.value)}
+                style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+              >
                 {['immunity', 'vitamins', 'beauty', 'energy', 'weight', 'general'].map((c) => (
-                  <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                  <option key={c} value={c}>
+                    {c.charAt(0).toUpperCase() + c.slice(1)}
+                  </option>
                 ))}
               </select>
             </div>
             <div className="form-field">
               <label>Badge</label>
-              <select value={form.badge} onChange={(e) => set('badge', e.target.value)}>
+              <select
+                value={form.badge}
+                onChange={(e) => set('badge', e.target.value)}
+                style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+              >
                 {BADGE_OPTIONS.map((b) => (
-                  <option key={b} value={b}>{b || 'None'}</option>
+                  <option key={b || 'none'} value={b}>
+                    {b || 'None'}
+                  </option>
                 ))}
               </select>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-              <Toggle label="Featured product" checked={form.isFeatured} onChange={(v) => set('isFeatured', v)} />
-              <Toggle label="Active / visible in store" checked={form.isActive} onChange={(v) => set('isActive', v)} />
+              <Toggle
+                label="Featured product"
+                checked={form.isFeatured}
+                onChange={(v) => set('isFeatured', v)}
+              />
+              <Toggle
+                label="Active / visible in store"
+                checked={form.isActive}
+                onChange={(v) => set('isActive', v)}
+              />
             </div>
           </div>
 
-          <button className="btn btn-primary" style={{ width: '100%', padding: 13 }} onClick={() => handleSubmit('active')} disabled={saving}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ width: '100%', padding: 13 }}
+            onClick={() => handleSubmit('active')}
+            disabled={saving}
+          >
             {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Publish Product'}
           </button>
-          <button className="btn btn-ghost" style={{ width: '100%' }} onClick={() => handleSubmit('draft')} disabled={saving}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ width: '100%' }}
+            onClick={() => handleSubmit('draft')}
+            disabled={saving}
+          >
             Save as Draft
           </button>
         </div>
@@ -337,27 +516,53 @@ function Field({ label, value, onChange, type = 'text', placeholder }) {
   return (
     <div className="form-field">
       <label>{label}</label>
-      <input type={type} placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+      <input
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+      />
     </div>
   );
 }
 
 function Toggle({ label, checked, onChange }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+    <label
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        cursor: 'pointer',
+        fontSize: 13,
+      }}
+    >
       <div
+        role="switch"
+        aria-checked={checked}
         onClick={() => onChange(!checked)}
         style={{
-          width: 36, height: 20,
+          width: 36,
+          height: 20,
           background: checked ? 'var(--accent)' : 'var(--surface2)',
-          border: '1px solid var(--border)', borderRadius: 20,
-          position: 'relative', flexShrink: 0,
+          border: '1px solid var(--border)',
+          borderRadius: 20,
+          position: 'relative',
+          flexShrink: 0,
         }}
       >
-        <div style={{
-          position: 'absolute', top: 2, left: checked ? 18 : 2,
-          width: 14, height: 14, background: '#fff', borderRadius: '50%',
-        }} />
+        <div
+          style={{
+            position: 'absolute',
+            top: 2,
+            left: checked ? 18 : 2,
+            width: 14,
+            height: 14,
+            background: '#fff',
+            borderRadius: '50%',
+          }}
+        />
       </div>
       {label}
     </label>
