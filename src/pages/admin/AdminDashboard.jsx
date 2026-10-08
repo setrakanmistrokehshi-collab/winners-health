@@ -26,7 +26,7 @@ const COLORS = ['#00c896', '#7c5cfc', '#f59e0b', '#ff4d6d', '#7a9e7e', '#c8854a'
 // usual case). Every amount on this page goes through toNaira(), so this is
 // the one place to change it.
 // ─────────────────────────────────────────────────────────────────
-const AMOUNT_DIVISOR = 100;
+const AMOUNT_DIVISOR = 1;
 
 const toNaira = (v) => (Number(v) || 0) / AMOUNT_DIVISOR;
 

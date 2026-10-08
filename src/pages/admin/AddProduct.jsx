@@ -13,6 +13,76 @@ const EMPTY = {
 };
 
 const BADGE_OPTIONS = ['', 'Best Selling', 'New', 'Sale', 'Top Rated'];
+const CATEGORIES = ['immunity', 'vitamins', 'beauty', 'energy', 'weight', 'general'];
+const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** Client-side UX validation only — API must still validate. */
+function validateForm(form, files) {
+  const name = String(form.name || '').trim();
+  if (!name || name.length > 150) {
+    return 'Product name is required (max 150 characters)';
+  }
+
+  const shortDescription = String(form.shortDescription || '').trim();
+  if (!shortDescription || shortDescription.length > 300) {
+    return 'Short description is required (max 300 characters)';
+  }
+
+  if (String(form.description || '').length > 5000) {
+    return 'Description must be at most 5000 characters';
+  }
+  const price = Number(form.price);
+  // Reject 0, negatives, "0000", empty
+  if (!Number.isFinite(price) || price <= 0) {
+    return 'Price must be greater than 0';
+  }
+
+  if (form.originalPrice !== '' && form.originalPrice != null) {
+    const originalPrice = Number(form.originalPrice);
+    if (!Number.isFinite(originalPrice) || originalPrice <= 0) {
+      return 'Original price must be greater than 0';
+    }
+    if (originalPrice < price) {
+      return 'Original price should be ≥ selling price';
+    }
+  }
+
+  // Stock: allow 0 (out of stock), block negatives and decimals
+  if (form.stock === '' || form.stock == null) {
+    return 'Stock is required';
+  }
+  const stock = Number(form.stock);
+  if (!Number.isFinite(stock) || !Number.isInteger(stock) || stock < 1) {
+    return 'Stock must be a whole number ≥ 1';
+  }
+
+  if (form.servings !== '' && form.servings != null) {
+    const servings = Number(form.servings);
+    if (!Number.isInteger(servings) || servings < 0) {
+      return 'Servings must be a whole number ≥ 0';
+    }
+  }
+
+  if (!CATEGORIES.includes(form.category)) {
+    return 'Invalid category';
+  }
+
+  if (form.badge && !BADGE_OPTIONS.includes(form.badge)) {
+    return 'Invalid badge';
+  }
+
+  for (const f of files) {
+    if (f.size > MAX_IMAGE_BYTES) {
+      return `Image "${f.name}" exceeds 5MB`;
+    }
+    if (!IMAGE_TYPES.includes(f.type)) {
+      return `Image "${f.name}" must be JPEG, PNG, or WebP`;
+    }
+  }
+
+  return null;
+}
 
 export default function AddProduct() {
   const { id } = useParams();
@@ -66,18 +136,31 @@ export default function AddProduct() {
   }
 
   function handleFiles(fileList) {
-    const incoming = Array.from(fileList);
+    const incoming = Array.from(fileList || []);
     const remainingSlots = 5 - files.length;
     if (remainingSlots <= 0) {
       toast.error('Maximum 5 new images');
       return;
     }
 
-    const toAdd = incoming.slice(0, remainingSlots);
-    setFiles((prev) => [...prev, ...toAdd]);
+    const accepted = [];
+    for (const f of incoming.slice(0, remainingSlots)) {
+      if (f.size > MAX_IMAGE_BYTES) {
+        toast.error(`"${f.name}" exceeds 5MB`);
+        continue;
+      }
+      if (!IMAGE_TYPES.includes(f.type)) {
+        toast.error(`"${f.name}" must be JPEG, PNG, or WebP`);
+        continue;
+      }
+      accepted.push(f);
+    }
+    if (!accepted.length) return;
+
+    setFiles((prev) => [...prev, ...accepted]);
     setPreviews((prev) => [
       ...prev,
-      ...toAdd.map((f) => URL.createObjectURL(f)),
+      ...accepted.map((f) => URL.createObjectURL(f)),
     ]);
   }
 
@@ -94,27 +177,47 @@ export default function AddProduct() {
   }
 
   async function handleSubmit(status = 'active') {
-    if (!form.name || !form.price || form.stock === '') {
-      toast.error('Name, price and stock are required');
+    const error = validateForm(form, files);
+    if (error) {
+      toast.error(error);
       return;
     }
 
     setSaving(true);
     try {
       const payload = {
-        ...form,
-        price: Number(form.price),
-        originalPrice: form.originalPrice ? Number(form.originalPrice) : undefined,
-        stock: Number(form.stock),
-        servings: form.servings ? Number(form.servings) : undefined,
+        name: String(form.name).trim(),
+        shortDescription: String(form.shortDescription).trim(),
+        description: String(form.description || '').trim(),
+        howToUse: String(form.howToUse || '').trim(),
+        nafdac: String(form.nafdac || '').trim(),
+        category: form.category,
         badge: form.badge || undefined,
-        ingredients: form.ingredients.split(',').map((s) => s.trim()).filter(Boolean),
-        benefits: form.benefits.split(',').map((s) => s.trim()).filter(Boolean),
-        tags: form.tags.split(',').map((s) => s.trim()).filter(Boolean),
+        price: Number(form.price),
+        originalPrice:
+          form.originalPrice !== '' && form.originalPrice != null
+            ? Number(form.originalPrice)
+            : undefined,
+        stock: Number(form.stock),
+        servings:
+          form.servings !== '' && form.servings != null
+            ? Number(form.servings)
+            : undefined,
+        ingredients: String(form.ingredients || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        benefits: String(form.benefits || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        tags: String(form.tags || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        isFeatured: Boolean(form.isFeatured),
         isActive: status === 'active',
       };
-
-      delete payload.images;
 
       let saved;
       if (isEdit) {
@@ -206,7 +309,6 @@ export default function AddProduct() {
       </div>
 
       <div className="add-product-layout">
-        {/* Form column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
           <div className="card">
             <div className="card-title" style={{ marginBottom: 16 }}>Product Information</div>
@@ -215,12 +317,14 @@ export default function AddProduct() {
               value={form.name}
               onChange={(v) => set('name', v)}
               placeholder="e.g. Greens Plus Daily Formula"
+              maxLength={150}
             />
             <Field
               label="Short Description *"
               value={form.shortDescription}
               onChange={(v) => set('shortDescription', v)}
               placeholder="One-line summary"
+              maxLength={300}
             />
             <div className="form-field">
               <label>Full Description</label>
@@ -229,6 +333,7 @@ export default function AddProduct() {
                 value={form.description}
                 onChange={(e) => set('description', e.target.value)}
                 placeholder="Detailed description…"
+                maxLength={5000}
                 style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
               />
             </div>
@@ -257,24 +362,32 @@ export default function AddProduct() {
                 value={form.price}
                 onChange={(v) => set('price', v)}
                 type="number"
+                min={0}
+                step="0.01"
               />
               <Field
                 label="Original Price (₦)"
                 value={form.originalPrice}
                 onChange={(v) => set('originalPrice', v)}
                 type="number"
+                min={0}
+                step="0.01"
               />
               <Field
                 label="Stock Quantity *"
                 value={form.stock}
                 onChange={(v) => set('stock', v)}
                 type="number"
+                min={1}
+                step="1"
               />
               <Field
                 label="Servings Per Pack"
                 value={form.servings}
                 onChange={(v) => set('servings', v)}
                 type="number"
+                min={0}
+                step="1"
               />
             </div>
           </div>
@@ -294,7 +407,6 @@ export default function AddProduct() {
           </div>
         </div>
 
-        {/* Sidebar — stacks under form on mobile */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
           <div className="card">
             <div className="card-title" style={{ marginBottom: 14 }}>
@@ -453,7 +565,7 @@ export default function AddProduct() {
                 onChange={(e) => set('category', e.target.value)}
                 style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
               >
-                {['immunity', 'vitamins', 'beauty', 'energy', 'weight', 'general'].map((c) => (
+                {CATEGORIES.map((c) => (
                   <option key={c} value={c}>
                     {c.charAt(0).toUpperCase() + c.slice(1)}
                   </option>
@@ -512,7 +624,7 @@ export default function AddProduct() {
   );
 }
 
-function Field({ label, value, onChange, type = 'text', placeholder }) {
+function Field({ label, value, onChange, type = 'text', placeholder, min, step, maxLength }) {
   return (
     <div className="form-field">
       <label>{label}</label>
@@ -520,6 +632,9 @@ function Field({ label, value, onChange, type = 'text', placeholder }) {
         type={type}
         placeholder={placeholder}
         value={value}
+        min={min}
+        step={step}
+        maxLength={maxLength}
         onChange={(e) => onChange(e.target.value)}
         style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
       />
