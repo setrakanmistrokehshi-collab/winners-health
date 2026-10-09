@@ -365,6 +365,20 @@ export default function StorefrontLayout() {
             grid-column: auto;
           }
         }
+
+        @media (max-width: 440px) {
+          .sf-header-inner {
+            height: auto;
+            min-height: 60px;
+            flex-wrap: wrap;
+          }
+
+          .sf-actions {
+            width: 100%;
+            flex-basis: 100%;
+            justify-content: space-between;
+          }
+        }
       `}</style>
 
       {/* ── Navbar ── */}
