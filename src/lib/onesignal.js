@@ -20,6 +20,18 @@ function canUsePush() {
   return Boolean(appId) && isSupported();
 }
 
+function registerDebugListeners() {
+  if (!import.meta.env.DEV) return;
+
+  OneSignal.Notifications.addEventListener('permissionChange', (granted) => {
+    console.debug('[OneSignal] Notification permission changed:', granted);
+  });
+
+  OneSignal.User.PushSubscription.addEventListener('change', ({ current }) => {
+    console.debug('[OneSignal] Push subscription changed:', current.optedIn);
+  });
+}
+
 export function initPush() {
   if (!canUsePush()) return Promise.resolve(false);
   if (!initializationPromise) {
@@ -30,8 +42,12 @@ export function initPush() {
       serviceWorkerPath: '/OneSignalSDKWorker.js',
     }).then(() => {
       initializationReady = true;
+      registerDebugListeners();
       return true;
-    }).catch(() => false);
+    }).catch((error) => {
+      console.error('[OneSignal] Initialization failed.', error);
+      return false;
+    });
   }
   return initializationPromise;
 }
@@ -64,7 +80,10 @@ export function loginPush(userId) {
     await OneSignal.login(externalId);
     activeExternalId = externalId;
     return true;
-  })().catch(() => false).finally(() => {
+  })().catch((error) => {
+    console.error('[OneSignal] Login failed.', error);
+    return false;
+  }).finally(() => {
     if (pendingExternalId === externalId) {
       pendingExternalId = null;
       loginPromise = null;
@@ -82,7 +101,8 @@ export async function logoutPush() {
     await OneSignal.logout();
     activeExternalId = null;
     return true;
-  } catch {
+  } catch (error) {
+    console.error('[OneSignal] Logout failed.', error);
     return false;
   }
 }
@@ -92,8 +112,12 @@ export function requestPushPermission() {
   try {
     return OneSignal.Notifications.requestPermission()
       .then(() => getPushPermissionState())
-      .catch(() => getPushPermissionState());
-  } catch {
+      .catch((error) => {
+        console.error('[OneSignal] Permission request failed.', error);
+        return getPushPermissionState();
+      });
+  } catch (error) {
+    console.error('[OneSignal] Permission request failed.', error);
     return Promise.resolve(getPushPermissionState());
   }
 }
