@@ -1,9 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useLayoutEffect } from 'react';
 import {
   createBrowserRouter,
   RouterProvider,
   Navigate,
   Outlet,
+  useLocation,
 } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import useAuthStore from '@/context/authStore';
@@ -149,76 +150,107 @@ function RedirectIfAuth() {
 // ─────────────────────────────────────────────
 // ROUTER
 // ─────────────────────────────────────────────
+function ScrollToTop() {
+  const location = useLocation();
+
+  useLayoutEffect(() => {
+    const previousRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    return () => {
+      window.history.scrollRestoration = previousRestoration;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const target = location.hash
+      ? document.getElementById(decodeURIComponent(location.hash.slice(1)))
+      : null;
+
+    if (target) {
+      target.scrollIntoView();
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, [location.key, location.hash]);
+
+  return <Outlet />;
+}
+
 const router = createBrowserRouter([
   {
-    element: <StorefrontLayout />,
-    children: [
-      { index: true, path: '/', element: <HomePage /> },
-      { path: 'products', element: <ProductsPage /> },
-      { path: 'products/:slug', element: <ProductDetailPage /> },
-      { path: 'cart', element: <CartPage /> },
-      { path: 'privacy-policy', element: <PrivacyPolicyPage /> },
-
-      {
-        element: <RequireAuth />,
-        children: [
-          { path: 'checkout', element: <CheckoutPage /> },
-          { path: 'orders/:id', element: <OrdersPage /> },
-          { path: 'orders', element: <OrdersPage /> },
-          { path: 'order-success', element: <OrderSuccessPage /> },
-          { path: 'profile', element: <ProfilePage /> },
-          { path: 'wishlist', element: <WishlistPage /> },
-        ],
-      },
-    ],
-  },
-
-  {
-    element: <RedirectIfAuth />,
-    children: [
-      { path: 'login', element: <LoginPage /> },
-      { path: 'register', element: <RegisterPage /> },
-      { path: 'forgot-password', element: <ForgotPasswordPage /> },
-      { path: 'reset-password', element: <ResetPasswordPage /> },
-    ],
-  },
-
-  {
-    path: 'admin-login',
-    element: <AdminLoginPage />,
-  },
-
-  {
-    element: <RequireAdmin />,
+    element: <ScrollToTop />,
     children: [
       {
-        path: 'admin',
-        element: <AdminLayout />,
+        element: <StorefrontLayout />,
         children: [
-          { index: true, element: <Navigate to="dashboard" replace /> },
-          { path: 'dashboard', element: <AdminDashboard /> },
-          { path: 'analytics', element: <AdminAnalytics /> },
-          { path: 'products', element: <AdminProducts /> },
-          { path: 'products/add', element: <AddProduct /> },
-          { path: 'orders/:id', element: <AdminOrders /> },
-          { path: 'orders', element: <AdminOrders /> },
-          { path: 'orders-list', element: <Orders /> },
-          { path: 'users', element: <AdminUsers /> },
-          { path: 'users/:id/role', element: <EditUserRole /> },
-          { path: 'customers', element: <Customers /> },
-          { path: 'reports', element: <Reports /> },
-          { path: 'reviews', element: <Reviews /> },
-          { path: 'categories', element: <Categories /> },
-          { path: 'promo-codes', element: <AdminPromoCodes /> },
-          { path: 'settings', element: <Settings /> },
-          { path: 'currencies', element: <AdminCurrencies /> },
-          { path: 'monitoring', element: <AdminMonitoring /> },
+          { index: true, path: '/', element: <HomePage /> },
+          { path: 'products', element: <ProductsPage /> },
+          { path: 'products/:slug', element: <ProductDetailPage /> },
+          { path: 'cart', element: <CartPage /> },
+          { path: 'privacy-policy', element: <PrivacyPolicyPage /> },
+
+          {
+            element: <RequireAuth />,
+            children: [
+              { path: 'checkout', element: <CheckoutPage /> },
+              { path: 'orders/:id', element: <OrdersPage /> },
+              { path: 'orders', element: <OrdersPage /> },
+              { path: 'order-success', element: <OrderSuccessPage /> },
+              { path: 'profile', element: <ProfilePage /> },
+              { path: 'wishlist', element: <WishlistPage /> },
+            ],
+          },
         ],
       },
+
+      {
+        element: <RedirectIfAuth />,
+        children: [
+          { path: 'login', element: <LoginPage /> },
+          { path: 'register', element: <RegisterPage /> },
+          { path: 'forgot-password', element: <ForgotPasswordPage /> },
+          { path: 'reset-password', element: <ResetPasswordPage /> },
+        ],
+      },
+
+      {
+        path: 'admin-login',
+        element: <AdminLoginPage />,
+      },
+
+      {
+        element: <RequireAdmin />,
+        children: [
+          {
+            path: 'admin',
+            element: <AdminLayout />,
+            children: [
+              { index: true, element: <Navigate to="dashboard" replace /> },
+              { path: 'dashboard', element: <AdminDashboard /> },
+              { path: 'analytics', element: <AdminAnalytics /> },
+              { path: 'products', element: <AdminProducts /> },
+              { path: 'products/add', element: <AddProduct /> },
+              { path: 'orders/:id', element: <AdminOrders /> },
+              { path: 'orders', element: <AdminOrders /> },
+              { path: 'orders-list', element: <Orders /> },
+              { path: 'users', element: <AdminUsers /> },
+              { path: 'users/:id/role', element: <EditUserRole /> },
+              { path: 'customers', element: <Customers /> },
+              { path: 'reports', element: <Reports /> },
+              { path: 'reviews', element: <Reviews /> },
+              { path: 'categories', element: <Categories /> },
+              { path: 'promo-codes', element: <AdminPromoCodes /> },
+              { path: 'settings', element: <Settings /> },
+              { path: 'currencies', element: <AdminCurrencies /> },
+              { path: 'monitoring', element: <AdminMonitoring /> },
+            ],
+          },
+        ],
+      },
+
+      { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
-
-  { path: '*', element: <Navigate to="/" replace /> },
 ]);
 
 // ─────────────────────────────────────────────
