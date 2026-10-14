@@ -271,6 +271,7 @@ export const orders = {
   // Customer
   myOrders: (params = {}) => api.get('/orders', { params }),
   get: (id) => api.get(`/orders/${id}`),
+  pay: (id, data) => api.post(`/orders/${id}/pay`, data),
   cancel: (id) => api.post(`/orders/${id}/cancel`),
   recent: (limit = 10) => api.get('/orders', { params: { limit, sort: '-createdAt' } }),
   

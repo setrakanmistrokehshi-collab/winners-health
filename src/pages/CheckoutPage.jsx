@@ -23,7 +23,7 @@ import {
   requestPushPermission,
 } from '@/lib/onesignal';
 
-const GATEWAY_LABELS = { monnify: 'Monnify', paystack: 'Paystack', nomba: 'Nomba' };
+const GATEWAY_LABELS = { monnify: 'Monnify', bachs: 'Bachs' };
 
 function normalizeLocation(value) {
   return String(value ?? '')
@@ -49,6 +49,7 @@ export default function CheckoutPage() {
   const [promo, setPromo] = useState('');
   const [promoData, setPromoData] = useState(null);
   const [promoError, setPromoError] = useState('');
+  const [gatewayError, setGatewayError] = useState('');
   const [checkingPromo, setCheckingPromo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [notifyOrderUpdates, setNotifyOrderUpdates] = useState(true);
@@ -73,6 +74,12 @@ export default function CheckoutPage() {
   });
   const city = watch('city');
   const state = watch('state');
+
+  useEffect(() => {
+    if (gateway === 'bachs' && !['USD', 'NGN'].includes(currency.code)) {
+      setGateway('monnify');
+    }
+  }, [gateway, currency.code]);
 
   useEffect(() => {
     if (!retryOrderId || restoredRetryId.current === retryOrderId) return undefined;
@@ -313,6 +320,7 @@ export default function CheckoutPage() {
     }
 
     setSubmitting(true);
+    setGatewayError('');
     try {
       if (permissionRequest) {
         let permissionTimeout;
@@ -358,7 +366,24 @@ export default function CheckoutPage() {
         currency: currency.code,
       };
 
-      const { data } = await paymentsApi.checkout(payload);
+      let data;
+      if (gateway === 'bachs') {
+        const orderPayload = { ...payload };
+        delete orderPayload.gateway;
+        const { data: orderResponse } = await paymentsApi.checkout(orderPayload);
+        const orderBody = orderResponse?.data ?? orderResponse ?? {};
+        const orderId = orderBody.orderId ?? orderBody.order?._id ?? orderBody.order?.id ?? orderBody.id;
+        if (!orderId) {
+          throw new Error('We could not prepare this order for Bachs. Please try again.');
+        }
+
+        const paymentResponse = await ordersApi.pay(orderId, { gateway: 'bachs' });
+        data = paymentResponse.data?.data ?? paymentResponse.data;
+      } else {
+        const response = await paymentsApi.checkout(payload);
+        data = response.data;
+      }
+
       if (data.checkoutUrl) {
         clear();
         window.location.href = data.checkoutUrl;
@@ -369,7 +394,11 @@ export default function CheckoutPage() {
       const errorData = err?.response?.data || {};
       const errorCode = errorData.code || errorData.errorCode ||
         (typeof errorData.error === 'string' ? errorData.error : errorData.error?.code);
-      if (errorCode === 'CART_LINE_STALE') {
+      if (errorCode === 'BACHS_CURRENCY_UNSUPPORTED') {
+        setGatewayError('Bachs is not available for this currency');
+      } else if (errorCode === 'BACHS_CHECKOUT_CREATE_FAILED') {
+        setGatewayError('We couldn’t start Bachs checkout. Please try again.');
+      } else if (errorCode === 'CART_LINE_STALE') {
         const details = errorData.line || errorData.cartLine || errorData.details?.line || errorData.details || {};
         const staleProductId = String(details.productId ?? details.product?._id ?? errorData.productId ?? '');
         const staleTierId = String(details.chosenTierId ?? errorData.chosenTierId ?? '');
@@ -552,7 +581,19 @@ export default function CheckoutPage() {
                 {/* Payment method */}
                 <div style={{ marginTop: 'var(--space-5)' }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--forest)', marginBottom: 8 }}>Payment method</div>
-                  <GatewayPicker value={gateway} onChange={setGateway} />
+                  <GatewayPicker
+                    value={gateway}
+                    currencyCode={currency.code}
+                    onChange={(nextGateway) => {
+                      setGateway(nextGateway);
+                      setGatewayError('');
+                    }}
+                  />
+                  {gatewayError && (
+                    <p role="alert" style={{ color: 'var(--error)', fontSize: 13, marginTop: 8 }}>
+                      {gatewayError}
+                    </p>
+                  )}
                 </div>
 
                 {isPushConfigured() && (

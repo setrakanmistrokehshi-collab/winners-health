@@ -1,15 +1,18 @@
 import { CreditCard } from 'lucide-react';
 
 const GATEWAYS = [
-  { code: 'monnify', label: 'Monnify', blurb: 'Card, bank transfer, USSD' },
-  { code: 'paystack', label: 'Paystack', blurb: 'Card, bank transfer, USSD' },
-  { code: 'nomba', label: 'Nomba', blurb: 'Card, bank transfer' },
+  { code: 'monnify', label: 'Pay with Monnify', blurb: 'Card, bank transfer, USSD' },
+  { code: 'bachs', label: 'Pay with Bachs', blurb: 'Secure payment redirect' },
 ];
 
-export default function GatewayPicker({ value, onChange }) {
+export default function GatewayPicker({ value, onChange, currencyCode }) {
+  const availableGateways = GATEWAYS.filter((gateway) =>
+    gateway.code !== 'bachs' || ['USD', 'NGN'].includes(currencyCode)
+  );
+
   return (
     <div role="radiogroup" aria-label="Payment method" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {GATEWAYS.map((g) => {
+      {availableGateways.map((g) => {
         const active = value === g.code;
         return (
           <label
