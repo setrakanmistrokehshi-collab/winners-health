@@ -6,9 +6,9 @@ import useAuthStore from '@/context/authStore';
 import { Field } from '@/components/ui';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
 import toast from 'react-hot-toast';
-import { Leaf, Check, Eye, EyeOff } from 'lucide-react';
+import { Leaf, Check, Eye, EyeOff, House } from 'lucide-react';
 
-// ── Shared Auth Card Shell (same as Login – already responsive-ready) ──
+// ── Shared Auth Card Shell ─────────────────────────────────────────
 function AuthShell({ title, subtitle, children }) {
   return (
     <div
@@ -16,127 +16,64 @@ function AuthShell({ title, subtitle, children }) {
       style={{
         minHeight: '100vh',
         display: 'flex',
-        background: 'linear-gradient(135deg, var(--cream) 0%, var(--parchment) 100%)',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--cream)',
+        padding: 'var(--space-6) var(--space-4)',
       }}
     >
-      {/* Left panel – hidden on mobile */}
-      <div
-        className="auth-left"
-        style={{
-          width: '45%',
-          background: 'var(--parchment)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          padding: 'var(--space-12)',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            top: '20%',
-            right: '-10%',
-            width: 320,
-            height: 320,
-            borderRadius: '50%',
-            background: 'rgba(66,133,244,0.16)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '15%',
-            left: '-5%',
-            width: 200,
-            height: 200,
-            borderRadius: '50%',
-            background: 'rgba(122,158,246,0.12)',
-          }}
-        />
-
-        <Link
-          to="/"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            marginBottom: 'var(--space-12)',
-            position: 'relative',
-          }}
-        >
-          <Leaf size={30} strokeWidth={1.6} color="var(--on-dark)" aria-hidden="true" />
-          <span
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 24,
-              color: 'var(--on-dark)',
-              fontWeight: 700,
-            }}
+      <div style={{ width: '100%', maxWidth: 460, animation: 'fadeUp 0.4s ease' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0, textDecoration: 'none' }}>
+            <Leaf size={25} strokeWidth={1.7} color="var(--sage)" aria-hidden="true" />
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--forest)', fontWeight: 700 }}>
+              Winners Health
+            </span>
+          </Link>
+          <Link
+            to="/"
+            className="btn btn-ghost btn-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, color: 'var(--forest)' }}
           >
-            Winners Health
-          </span>
-        </Link>
+            <House size={15} strokeWidth={2} aria-hidden="true" />
+            Home
+          </Link>
+        </div>
 
-        <div style={{ position: 'relative' }}>
-          <h2
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 36,
-              color: 'var(--on-dark)',
-              marginBottom: 16,
-              lineHeight: 1.2,
-            }}
-          >
+        <div style={{ textAlign: 'center', marginBottom: 'var(--space-6)' }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--forest)', marginBottom: 6, lineHeight: 1.25 }}>
             Your wellness journey starts here.
           </h2>
-          <p
-            style={{
-              color: 'var(--sage-light)',
-              lineHeight: 1.7,
-              fontSize: 15,
-              maxWidth: 360,
-            }}
-          >
-            Premium supplements trusted by 50,000+ Nigerians. Quality ingredients, real results.
+          <p style={{ color: 'var(--muted)', lineHeight: 1.6, fontSize: 14, margin: 0 }}>
+            Premium supplements trusted by 50,000+ Individuals. Quality ingredients, real results.
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 40 }}>
-            {['Free delivery over ₦20,000', '30-day returns', '100% natural ingredients'].map(
-              (t) => (
-                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--sage-light)', fontSize: 14 }}>
-                  <Check size={15} strokeWidth={2.4} aria-hidden="true" /> {t}
-                </div>
-              )
-            )}
-          </div>
         </div>
-      </div>
 
-      {/* Right panel */}
-      <div
-        className="auth-right"
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 'var(--space-8)',
-        }}
-      >
-        <div style={{ width: '100%', maxWidth: 440, animation: 'fadeUp 0.4s ease' }}>
-          <h1
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 30,
-              color: 'var(--forest)',
-              marginBottom: 6,
-            }}
-          >
+        <div
+          className="auth-shell__card"
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            background: 'var(--white)',
+            borderRadius: 20,
+            boxShadow: '0 1px 2px rgba(20,22,31,0.04), 0 12px 32px -12px rgba(20,22,31,0.12)',
+            padding: 'var(--space-6) var(--space-5)',
+          }}
+        >
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--forest)', marginBottom: 6 }}>
             {title}
           </h1>
-          <p style={{ color: 'var(--muted)', marginBottom: 'var(--space-8)' }}>{subtitle}</p>
+          <p style={{ color: 'var(--muted)', marginBottom: 'var(--space-6)', fontSize: 14 }}>{subtitle}</p>
           {children}
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px 18px', marginTop: 20 }}>
+          {['Free delivery over ₦40,000', '100% natural ingredients'].map((text) => (
+            <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--muted)', fontSize: 12 }}>
+              <Check size={13} strokeWidth={2.4} color="var(--sage)" aria-hidden="true" /> {text}
+            </div>
+          ))}
         </div>
       </div>
     </div>

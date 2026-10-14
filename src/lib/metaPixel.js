@@ -89,23 +89,29 @@ export function trackEvent(eventName, eventId, params = {}) {
 // ── Convenience wrappers for this store's funnel ──────────────────
 
 export function trackViewContent(product, eventId) {
-  trackEvent('ViewContent', eventId, {
+  const params = {
     content_ids: [product.id ?? product._id],
     content_type: 'product',
     content_name: product.name,
-    currency: 'NGN',
-    value: product.price,
-  });
+  };
+  if (!product.pwywEnabled) {
+    params.currency = 'NGN';
+    params.value = product.price;
+  }
+  trackEvent('ViewContent', eventId, params);
 }
 
 export function trackAddToCart(product, quantity, eventId) {
-  trackEvent('AddToCart', eventId, {
+  const params = {
     content_ids: [product.id ?? product._id],
     content_type: 'product',
     content_name: product.name,
-    currency: 'NGN',
-    value: (product.price ?? 0) * quantity,
-  });
+  };
+  if (!product.pwywEnabled) {
+    params.currency = 'NGN';
+    params.value = (product.price ?? 0) * quantity;
+  }
+  trackEvent('AddToCart', eventId, params);
 }
 
 export function trackInitiateCheckout(items, totalValue, eventId) {

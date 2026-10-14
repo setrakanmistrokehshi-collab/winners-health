@@ -47,14 +47,28 @@ export default function GoogleSignInButton({ onSuccess, onError }) {
   const { ready, renderButton } = useGoogleIdentity(handleCredential);
 
   useEffect(() => {
-    if (ready && buttonRef.current) {
-      renderButton(buttonRef.current);
-    }
+    if (!ready || !buttonRef.current) return undefined;
+
+    const container = buttonRef.current;
+    const wrapper = container.parentElement;
+    let lastWidth = 0;
+    const renderResponsiveButton = () => {
+      const availableWidth = wrapper?.clientWidth || container.clientWidth || 320;
+      const width = Math.max(200, Math.min(400, Math.floor(availableWidth)));
+      if (width === lastWidth) return;
+      lastWidth = width;
+      renderButton(container, { width });
+    };
+
+    renderResponsiveButton();
+    const observer = new ResizeObserver(renderResponsiveButton);
+    if (wrapper) observer.observe(wrapper);
+    return () => observer.disconnect();
   }, [ready, renderButton]);
 
   return (
-    <div>
-      <div ref={buttonRef} aria-busy={submitting} />
+    <div style={{ width: '100%', minWidth: 0 }}>
+      <div ref={buttonRef} aria-busy={submitting} style={{ width: '100%', minWidth: 0 }} />
       {submitting && <p style={{ fontSize: 13, opacity: 0.7 }}>Signing you in…</p>}
     </div>
   );

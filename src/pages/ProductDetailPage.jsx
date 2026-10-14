@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { products as productsApi } from '@/api/client';
 import useCartStore from '@/context/cartStore';
 import useAuthStore from '@/context/authStore';
 import { PageLoader } from '@/components/ui';
 import RecommendedProducts from '@/components/RecommendedProducts';
 import PriceTag from '@/components/PriceTag';
+import TierSelector from '@/components/TierSelector';
+import useCurrencyStore from '@/context/currencyStore';
 import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
 import { Check, ChevronLeft, Lock, Box } from 'lucide-react';
@@ -14,14 +16,20 @@ import { trackViewContent, trackAddToCart, generateEventId } from '@/lib/metaPix
 export default function ProductDetailPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedTierId = searchParams.get('tierId');
+  const reselectKey = searchParams.get('reselect');
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState(() => Math.max(1, Number(searchParams.get('qty')) || 1));
   const [activeImage, setActiveImage] = useState(0);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [tierSelection, setTierSelection] = useState({ productId: '', tierId: '' });
 
   const addItem = useCartStore((s) => s.addItem);
+  const replaceStaleItem = useCartStore((s) => s.replaceStaleItem);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const currency = useCurrencyStore((s) => s.getCurrent());
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm();
 
@@ -78,10 +86,28 @@ export default function ProductDetailPage() {
   // on "Add to Cart" collapses to a single addItem call + single toast,
   // instead of queueing one of each per click.
   const addingRef = useRef(false);
+  const addConfiguredItem = () => {
+    if (product.pwywEnabled) {
+      const selected = product.pwywTiers?.find((tier) => String(tier.id) === String(selectedTierId));
+      if (!selected) {
+        toast.error('Choose an amount before adding this product');
+        return false;
+      }
+      if (reselectKey) {
+        replaceStaleItem(reselectKey, product, qty, selected.id);
+      } else {
+        addItem(product, qty, selected.id);
+      }
+      return true;
+    }
+    addItem(product, qty);
+    return true;
+  };
+
   const handleAddToCart = () => {
     if (addingRef.current) return;
+    if (!addConfiguredItem()) return;
     addingRef.current = true;
-    addItem(product, qty);
     trackAddToCart(product, qty, generateEventId());
     toast.success(`${qty}× ${product.name} added to cart`, {
       icon: <Check size={18} strokeWidth={2.5} color="var(--success)" />,
@@ -90,7 +116,7 @@ export default function ProductDetailPage() {
   };
 
   const handleCheckout = () => {
-    addItem(product, qty);
+    if (!addConfiguredItem()) return;
     navigate('/checkout');
   };
 
@@ -124,7 +150,16 @@ export default function ProductDetailPage() {
     );
   }
 
-  const discount = product.originalPrice > product.price
+  const tiers = product.pwywTiers || [];
+  const requestedTier = tiers.find((tier) => String(tier.id) === String(requestedTierId));
+  const defaultTier = tiers.find((tier) => tier.isDefault);
+  const selectedTierId = String(
+    tierSelection.productId === String(product._id)
+      ? tierSelection.tierId
+      : (requestedTier || defaultTier || tiers[0])?.id || ''
+  );
+
+  const discount = !product.pwywEnabled && product.originalPrice > product.price
     ? Math.round((1 - product.price / product.originalPrice) * 100)
     : 0;
 
@@ -470,7 +505,7 @@ export default function ProductDetailPage() {
             <div>
               <div className="pdp-badges">
                 <span className="badge badge-green">{product.category}</span>
-                {product.badge && (
+                {!product.pwywEnabled && product.badge && (
                   <span className="badge badge-forest">{product.badge}</span>
                 )}
                 {discount > 0 && (
@@ -501,16 +536,40 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            <div className="pdp-price-row">
-              <span className="pdp-price">
-                <PriceTag amount={product.price} size="xl" serif />
-              </span>
-              {product.originalPrice > product.price && (
-                <span className="pdp-original-price">
-                  <PriceTag amount={product.originalPrice} size="sm" muted />
+            {product.pwywEnabled ? (
+              <div className="pdp-price-row">
+                <span className="pdp-price">
+                  <PriceTag
+                    amount={product.pwywTiers?.find((tier) => String(tier.id) === String(selectedTierId))?.amount}
+                    size="xl"
+                    serif
+                  />
                 </span>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="pdp-price-row">
+                <span className="pdp-price">
+                  <PriceTag amount={product.price} size="xl" serif />
+                </span>
+                {product.originalPrice > product.price && (
+                  <span className="pdp-original-price">
+                    <PriceTag amount={product.originalPrice} size="sm" muted />
+                  </span>
+                )}
+              </div>
+            )}
+
+            {product.pwywEnabled && (
+              <TierSelector
+                tiers={product.pwywTiers || []}
+                value={selectedTierId}
+                onChange={(tierId) => setTierSelection({
+                  productId: String(product._id),
+                  tierId: String(tierId),
+                })}
+                currency={currency}
+              />
+            )}
 
             <p className="pdp-description">{product.description}</p>
 
@@ -571,7 +630,14 @@ export default function ProductDetailPage() {
                     className="btn btn-primary pdp-add-to-cart-btn"
                     onClick={handleAddToCart}
                   >
-                    Add to Cart — <PriceTag amount={product.price * qty} size="md" strike={false} color="#ffffff" />
+                    Add to Cart — <PriceTag
+                      amount={product.pwywEnabled
+                        ? Number(product.pwywTiers?.find((tier) => String(tier.id) === String(selectedTierId))?.amount) * qty
+                        : product.price * qty}
+                      size="md"
+                      strike={false}
+                      color="#ffffff"
+                    />
                   </button>
 
                   {isAuthenticated ? (

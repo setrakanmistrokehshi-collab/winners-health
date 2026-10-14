@@ -81,7 +81,7 @@ function AuthShell({ title, subtitle, children }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 28, alignItems: 'center' }}>
-        {['Free delivery over ₦40,000', '30-day returns', '100% natural ingredients'].map(t => (
+        {['Free delivery over ₦40,000', '100% natural ingredients'].map(t => (
           <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--muted)', fontSize: 13 }}>
             <Check size={13} strokeWidth={2.4} color="var(--sage)" aria-hidden="true" /> {t}
           </div>

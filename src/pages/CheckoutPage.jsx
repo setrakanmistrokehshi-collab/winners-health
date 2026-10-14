@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 //import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import useCartStore from '@/context/cartStore';
 import useAuthStore from '@/context/authStore';
 import api, { orders as ordersApi, payments as paymentsApi, products as productsApi, shipping as shippingApi } from '@/api/client';
@@ -40,7 +40,7 @@ function unwrapShippingPayload(payload) {
 }
 
 export default function CheckoutPage() {
-  const { items, replaceItems, clear } = useCartStore();
+  const { items, replaceItems, clear, markStale } = useCartStore();
   const user = useAuthStore((s) => s.user);
   const [searchParams] = useSearchParams();
   const retryOrderId = searchParams.get('retry');
@@ -48,6 +48,7 @@ export default function CheckoutPage() {
  // const  navigate = useNavigate();
   const [promo, setPromo] = useState('');
   const [promoData, setPromoData] = useState(null);
+  const [promoError, setPromoError] = useState('');
   const [checkingPromo, setCheckingPromo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [notifyOrderUpdates, setNotifyOrderUpdates] = useState(true);
@@ -143,8 +144,14 @@ export default function CheckoutPage() {
   // config/cartMoney.js. The backend independently recomputes and
   // converts to kobo in routes/payments.js, so this is a display
   // preview only; it never determines the actual charge.
-  const subtotal  = items.reduce((s, i) => s + i.price * i.quantity, 0);
-  const discount  = promoData ? Math.round(subtotal * (promoData.discountPercent / 100)) : 0;
+  const hasPwywItems = items.some((item) => item.pwywEnabled);
+  const hasStaleItems = items.some((item) => item.stale);
+  const subtotal = items.reduce((sum, item) => sum + (item.pwywEnabled
+    ? Number(item.lineTotal ?? item.price * item.quantity) || 0
+    : item.price * item.quantity), 0);
+  const discount = promoData
+    ? Math.round(subtotal * (promoData.discountPercent / 100))
+    : 0;
   const locationText = normalizeLocation(`${city || ''} ${state || ''}`);
   const matchedZone = shippingConfig.zones.find((zone) => {
     const zoneName = normalizeLocation(zone.name);
@@ -218,7 +225,7 @@ export default function CheckoutPage() {
 
     loadShippingConfig();
 
-    if (items.length > 0) {
+    if (items.length > 0 && !items.some((item) => item.pwywEnabled)) {
       trackInitiateCheckout(items, subtotal, generateEventId());
     }
 
@@ -263,10 +270,11 @@ export default function CheckoutPage() {
   const handlePromo = async () => {
     if (!promo.trim()) return;
     setCheckingPromo(true);
+    setPromoError('');
     try {
       const { data } = await paymentsApi.validatePromo(promo.trim().toUpperCase());
       setPromoData(data);
-      toast.success(`${data.discountPercent}% discount applied`, {
+      toast.success(hasPwywItems ? 'Promo applied' : `${data.discountPercent}% promo applied`, {
         icon: <Check size={18} strokeWidth={2.5} color="var(--success)" />,
       });
     } catch (err) {
@@ -279,6 +287,10 @@ export default function CheckoutPage() {
 
   const onSubmit = async (formData) => {
     if (items.length === 0) { toast.error('Cart is empty'); return; }
+    if (hasStaleItems) {
+      toast.error('Choose again for unavailable options before checkout');
+      return;
+    }
     if (shippingQuoteLoading) {
       toast.error('Calculating shipping fee. Please wait.');
       return;
@@ -324,23 +336,27 @@ export default function CheckoutPage() {
         }
       }
 
-     const payload = {
-  items: items.map((i) => ({ productId: i._id, quantity: i.quantity })),
-  customer: {                         
-    name:  formData.name,
-    email: formData.email,
-    phone: formData.phone,
-  },
-  shippingAddress: {
-    street: formData.street,
-    city:   formData.city,
-    state:  formData.state,
-    country: 'Nigeria', 
-  },
-  promoCode: promoData ? promo.trim().toUpperCase() : undefined,
-  gateway,
-  currency: currency.code,
-};
+      const payload = {
+        items: items.map((item) => ({
+          productId: item._id,
+          quantity: item.quantity,
+          ...(item.pwywEnabled ? { chosenTierId: item.chosenTierId } : {}),
+        })),
+        customer: {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+        },
+        shippingAddress: {
+          street: formData.street,
+          city: formData.city,
+          state: formData.state,
+          country: 'Nigeria',
+        },
+        promoCode: promoData ? promo.trim().toUpperCase() : undefined,
+        gateway,
+        currency: currency.code,
+      };
 
       const { data } = await paymentsApi.checkout(payload);
       if (data.checkoutUrl) {
@@ -350,7 +366,28 @@ export default function CheckoutPage() {
         toast.error('Payment initiation failed');
       }
     } catch (err) {
-      toast.error(err?.response?.data?.message || 'Checkout failed. Please try again.');
+      const errorData = err?.response?.data || {};
+      const errorCode = errorData.code || errorData.errorCode ||
+        (typeof errorData.error === 'string' ? errorData.error : errorData.error?.code);
+      if (errorCode === 'CART_LINE_STALE') {
+        const details = errorData.line || errorData.cartLine || errorData.details?.line || errorData.details || {};
+        const staleProductId = String(details.productId ?? details.product?._id ?? errorData.productId ?? '');
+        const staleTierId = String(details.chosenTierId ?? errorData.chosenTierId ?? '');
+        const lineId = String(details.lineId ?? errorData.lineId ?? '');
+        const itemIndex = Number(details.itemIndex ?? errorData.itemIndex);
+        let affected = items.filter((item, index) =>
+          (lineId && String(item.lineId) === lineId) ||
+          (staleProductId && String(item._id) === staleProductId && (!staleTierId || String(item.chosenTierId) === staleTierId)) ||
+          (Number.isInteger(itemIndex) && index === itemIndex)
+        );
+        if (affected.length === 0) affected = items.filter((item) => item.pwywEnabled);
+        markStale(affected.map((item) => item.cartKey || item.lineId || String(item._id)));
+        toast.error('This option is no longer available. Please choose again.');
+      } else if (errorCode === 'PROMO_BELOW_FLOOR') {
+        setPromoError("This promo can't be applied to the selected option.");
+      } else {
+        toast.error(errorData.message || 'Checkout failed. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -361,7 +398,7 @@ export default function CheckoutPage() {
       <div className='container'>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 32, marginBottom: 'var(--space-8)', color: 'var(--forest)' }}>Checkout</h1>
 
-        {priceChanges?.priceChanges?.length > 0 && (
+        {!hasPwywItems && priceChanges?.priceChanges?.length > 0 && (
           <div style={{
             display: 'flex', alignItems: 'flex-start', gap: 10,
             background: 'var(--warning-bg, rgba(224,160,62,0.12))',
@@ -383,6 +420,11 @@ export default function CheckoutPage() {
         )}
 
         <form onSubmit={handleSubmit(onSubmit)}>
+          {hasStaleItems && (
+            <div role="alert" style={{ marginBottom: 'var(--space-5)', color: 'var(--error)' }}>
+              Choose again for unavailable options in your <Link to="/cart">cart</Link> before checkout.
+            </div>
+          )}
           <div className='checkout-grid' style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 'var(--space-8)', alignItems: 'start' }}>
             {/* ── Left: Details ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -424,15 +466,24 @@ export default function CheckoutPage() {
               <div className='card' style={{ padding: 'var(--space-6)' }}>
                 <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 'var(--space-4)', color: 'var(--forest)' }}>Order Items</h2>
                 {items.map((item) => (
-                  <div key={item._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3) 0', borderBottom: '1px solid var(--border-light)' }}>
+                  <div key={item.cartKey || item.lineId || item._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-3) 0', borderBottom: '1px solid var(--border-light)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                       <Box size={20} strokeWidth={1.8} color="var(--sage)" aria-hidden="true" style={{ flexShrink: 0 }} />
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--forest)' }}>{item.name}</div>
-                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>Qty: {item.quantity}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                          {item.chosenTierLabel ? `${item.chosenTierLabel} · ` : ''}Qty: {item.quantity}
+                        </div>
                       </div>
                     </div>
-                    <span style={{ flexShrink: 0, marginLeft: 12 }}><PriceTag amount={item.price * item.quantity} size="sm" /></span>
+                    <span style={{ flexShrink: 0, marginLeft: 12 }}>
+                      <PriceTag
+                        amount={item.pwywEnabled
+                          ? Number(item.lineTotal ?? item.price * item.quantity)
+                          : item.price * item.quantity}
+                        size="sm"
+                      />
+                    </span>
                   </div>
                 ))}
               </div>
@@ -450,7 +501,10 @@ export default function CheckoutPage() {
                       className='input'
                       placeholder='Promo code'
                       value={promo}
-                      onChange={(e) => setPromo(e.target.value.toUpperCase())}
+                      onChange={(e) => {
+                        setPromo(e.target.value.toUpperCase());
+                        setPromoError('');
+                      }}
                       style={{ flex: 1 }}
                     />
                     <button type='button' className='btn btn-outline btn-sm' onClick={handlePromo} disabled={checkingPromo}>
@@ -459,9 +513,21 @@ export default function CheckoutPage() {
                   </div>
                   {promoData && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--success)', marginTop: 4 }}>
-                      <Check size={13} strokeWidth={2.5} /> {promoData.discountPercent}% discount applied
+                      <Check size={13} strokeWidth={2.5} /> {hasPwywItems ? 'Promo applied' : `${promoData.discountPercent}% promo applied`}
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                          setPromo('');
+                          setPromoData(null);
+                          setPromoError('');
+                        }}
+                      >
+                        Remove
+                      </button>
                     </div>
                   )}
+                  {promoError && <div role="alert" style={{ color: 'var(--error)', fontSize: 12, marginTop: 5 }}>{promoError}</div>}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
@@ -475,7 +541,7 @@ export default function CheckoutPage() {
                       : !shippingAvailable
                         ? 'Unavailable for this location'
                         : shipping === 0 ? 'Free' : undefined}
-                    priceAmount={!shippingQuoteLoading && shippingAvailable && shipping > 0 ? shipping : undefined}
+                        priceAmount={!shippingQuoteLoading && shippingAvailable && shipping > 0 ? shipping : undefined}
                     valueColor={!shippingAvailable || shipping === 0 ? 'var(--muted)' : undefined}
                   />
                   {discount > 0 && <LineItem label={`Promo (${promoData?.discountPercent}%)`} priceAmount={-discount} valueColor='var(--success)' />}
@@ -510,7 +576,7 @@ export default function CheckoutPage() {
                   type='submit'
                   className='btn btn-primary btn-full btn-lg'
                   style={{ marginTop: 'var(--space-5)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                  disabled={submitting || shippingQuoteLoading || !shippingAvailable}
+                  disabled={submitting || shippingQuoteLoading || !shippingAvailable || hasStaleItems}
                 >
                   {submitting ? (
                     <><div className='spinner' style={{ width: 18, height: 18, borderColor: 'white' }} /> Processing...</>

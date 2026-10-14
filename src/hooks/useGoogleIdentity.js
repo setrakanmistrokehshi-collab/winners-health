@@ -75,7 +75,7 @@ export function useGoogleIdentity(onCredential) {
       type: 'standard',
       theme: 'outline',
       size: 'large',
-      width: 320,
+      width: Math.max(200, Math.min(400, Math.floor(container.parentElement?.clientWidth || container.clientWidth || 320))),
       text: 'continue_with',
       ...options,
     });

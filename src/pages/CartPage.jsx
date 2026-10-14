@@ -21,13 +21,15 @@ export default function CartPage() {
   // Cart items come from Product.price, which is plain Naira — see
   // config/cartMoney.js for why this uses different helpers than
   // OrdersPage (which formats real Order documents, genuinely in kobo).
-  const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const subtotal = items.reduce((sum, item) => sum + (item.pwywEnabled
+    ? Number(item.lineTotal ?? item.price * item.quantity) || 0
+    : item.price * item.quantity), 0);
   const shipping = calculateShipping(subtotal);
   const total     = subtotal + shipping;
   const freeShippingProgress = Math.min(100, Math.round((subtotal / FREE_SHIPPING_THRESHOLD_NAIRA) * 100));
 
   const handleRemove = (item) => {
-    removeItem(item._id);
+    removeItem(item.cartKey || item._id);
     toast.success(`${item.name} removed from cart`, {
       icon: <Trash2 size={18} strokeWidth={2} color="var(--rust)" />,
     });
@@ -59,7 +61,7 @@ export default function CartPage() {
           Shopping Cart ({items.length} item{items.length !== 1 ? 's' : ''})
         </h1>
 
-        {priceChanges?.priceChanges?.length > 0 && (
+            {!items.some((item) => item.pwywEnabled) && priceChanges?.priceChanges?.length > 0 && (
           <div style={{
             display: 'flex', alignItems: 'flex-start', gap: 10,
             background: 'var(--warning-bg, rgba(224,160,62,0.12))',
@@ -81,7 +83,7 @@ export default function CartPage() {
               <button className='btn btn-ghost btn-sm' onClick={handleClear}>Clear all</button>
             </div>
             {items.map((item) => (
-              <div key={item._id} className='cart-item' style={{
+              <div key={item.cartKey || item.lineId || item._id} className='cart-item' style={{
                 display: 'flex', gap: 'var(--space-4)', padding: 'var(--space-5)',
                 borderBottom: '1px solid var(--border-light)',
                 alignItems: 'center',
@@ -107,6 +109,29 @@ export default function CartPage() {
                     {item.name}
                   </Link>
                   <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{item.category}</div>
+                  {item.chosenTierLabel && (
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>{item.chosenTierLabel}</div>
+                  )}
+                  {item.stale && (
+                    <div style={{ marginTop: 8, color: 'var(--error)', fontSize: 13 }}>
+                      <div>This option is no longer available. Please choose again.</div>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        style={{ marginTop: 4, paddingLeft: 0 }}
+                        onClick={() => {
+                          const params = new URLSearchParams({
+                            tierId: String(item.chosenTierId || ''),
+                            reselect: item.cartKey || item.lineId || String(item._id),
+                            qty: String(item.quantity),
+                          });
+                          navigate(`/products/${item.slug || item._id}?${params.toString()}`);
+                        }}
+                      >
+                        Choose again
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Qty + Price */}
@@ -114,7 +139,7 @@ export default function CartPage() {
                   {/* Qty */}
                   <div style={{ display: 'flex', alignItems: 'center', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden', flexShrink: 0 }}>
                     <button
-                      onClick={() => updateQty(item._id, item.quantity - 1)}
+                      onClick={() => updateQty(item.cartKey || item._id, item.quantity - 1)}
                       aria-label="Decrease quantity"
                       style={{ width: 34, height: 36, cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}
                     >
@@ -122,7 +147,7 @@ export default function CartPage() {
                     </button>
                     <span style={{ width: 34, textAlign: 'center', fontWeight: 600, color: 'var(--forest)' }}>{item.quantity}</span>
                     <button
-                      onClick={() => updateQty(item._id, item.quantity + 1)}
+                      onClick={() => updateQty(item.cartKey || item._id, item.quantity + 1)}
                       aria-label="Increase quantity"
                       style={{ width: 34, height: 36, cursor: 'pointer', background: 'none', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--forest)' }}
                     >
@@ -132,9 +157,16 @@ export default function CartPage() {
 
                   {/* Price */}
                   <div style={{ textAlign: 'right', minWidth: 100, flexShrink: 0 }}>
-                    <div><PriceTag amount={item.price * item.quantity} size="md" /></div>
+                    <div>
+                      <PriceTag
+                        amount={item.pwywEnabled
+                          ? Number(item.lineTotal ?? item.price * item.quantity)
+                          : item.price * item.quantity}
+                        size="md"
+                      />
+                    </div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                      <PriceTag amount={item.price} size="sm" muted /> each
+                      <PriceTag amount={item.unitPrice ?? item.price} size="sm" muted /> each
                     </div>
                   </div>
                 </div>
@@ -195,6 +227,7 @@ export default function CartPage() {
               className='btn btn-primary btn-full btn-lg'
               style={{ marginTop: 'var(--space-5)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
               onClick={() => isAuthenticated ? navigate('/checkout') : navigate('/login?redirect=/checkout')}
+              disabled={items.some((item) => item.stale)}
             >
               {isAuthenticated ? 'Proceed to Checkout' : 'Login to Checkout'}
               <ArrowRight size={18} strokeWidth={2.2} />

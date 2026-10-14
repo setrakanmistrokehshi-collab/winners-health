@@ -28,34 +28,35 @@ export default function useRevalidateCart() {
   const [changes, setChanges] = useState(null); // null = not checked yet this mount
 
   const revalidate = useCallback(async () => {
-    if (items.length === 0) {
+    const regularItems = items.filter((item) => !item.pwywEnabled);
+    if (regularItems.length === 0) {
       setChanges(null);
       return;
     }
     setChecking(true);
     try {
-      const ids = items.map((i) => i._id);
+      const ids = [...new Set(regularItems.map((item) => item._id))];
       const { data } = await productsApi.revalidateCart(ids);
       const byId = new Map(data.products.map((p) => [p.productId, p]));
 
       const priceChanges = [];
       const removed = [];
 
-      for (const item of items) {
+      for (const item of regularItems) {
         const fresh = byId.get(item._id);
         if (!fresh || !fresh.available) {
           removed.push(item.name);
-          removeItem(item._id);
+          removeItem(item.cartKey || item._id);
           continue;
         }
         if (fresh.price !== item.price) {
           priceChanges.push({ name: item.name, from: item.price, to: fresh.price });
-          updateItemFields(item._id, { price: fresh.price, stock: fresh.stock });
+          updateItemFields(item.cartKey || item._id, { price: fresh.price, stock: fresh.stock });
         } else if (fresh.stock !== item.stock) {
           // Stock alone changed (no price impact) — still worth
           // syncing so a qty stepper doesn't let someone request more
           // than what's actually available.
-          updateItemFields(item._id, { stock: fresh.stock });
+          updateItemFields(item.cartKey || item._id, { stock: fresh.stock });
         }
       }
 

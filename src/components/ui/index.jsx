@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import useCartStore from '@/context/cartStore';
 import { users as usersApi } from '@/api/client';
 import useAuthStore from '@/context/authStore';
@@ -12,6 +12,7 @@ import PriceTag from '@/components/PriceTag';
 
 // ── ProductCard ───────────────────────────────────────────────────
 export function ProductCard({ product, delay = 0 }) {
+  const navigate = useNavigate();
   const addItem = useCartStore((s) => s.addItem);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [wishlisted, setWishlisted] = useState(false);
@@ -33,6 +34,10 @@ export function ProductCard({ product, delay = 0 }) {
   const handleAddToCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (product.pwywEnabled) {
+      navigate(`/products/${product.slug || product._id}`);
+      return;
+    }
     if (adding) return; // guard against rapid repeat clicks re-firing the toast/store update
     setAdding(true);
     addItem(product);
@@ -43,7 +48,7 @@ export function ProductCard({ product, delay = 0 }) {
     setTimeout(() => setAdding(false), 600);
   };
 
-  const discount = product.originalPrice && product.originalPrice > product.price
+  const discount = !product.pwywEnabled && product.originalPrice && product.originalPrice > product.price
     ? Math.round((1 - product.price / product.originalPrice) * 100)
     : 0;
 
@@ -89,7 +94,7 @@ export function ProductCard({ product, delay = 0 }) {
 
         {/* Badges */}
        <div className="product-card-badges">
-  {product.badge && (
+  {!product.pwywEnabled && product.badge && (
     <span className="badge badge-forest">{product.badge}</span>
   )}
   {discount > 0 && (
@@ -144,7 +149,12 @@ export function ProductCard({ product, delay = 0 }) {
 
         {/* Price */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 'auto' }}>
-          <PriceTag amount={product.price} size="md" />
+          <PriceTag
+            amount={product.pwywEnabled
+              ? product.pwywTiers?.find((tier) => tier.isDefault)?.amount
+              : product.price}
+            size="md"
+          />
         </div>
 
         {/* Stock */}
@@ -165,7 +175,9 @@ export function ProductCard({ product, delay = 0 }) {
           style={{ marginTop: 4, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
         >
           {adding ? <Check size={14} strokeWidth={2.5} /> : <ShoppingCart size={14} strokeWidth={2} />}
-          {adding ? 'Added' : product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
+          <span style={{ flex: 1, minWidth: 0, whiteSpace: 'normal', textAlign: 'center', lineHeight: 1.1 }}>
+            {product.pwywEnabled ? 'Choose Amount' : adding ? 'Added' : product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
+          </span>
         </button>
       </div>
     </Link>

@@ -10,12 +10,39 @@ const EMPTY = {
   price: '', originalPrice: '', stock: '', servings: '',
   category: 'immunity', badge: '', tags: '',
   nafdac: '', isFeatured: false, isActive: true,
+  pwywEnabled: false, pwywTiers: [],
 };
 
 const BADGE_OPTIONS = ['', 'Best Selling', 'New', 'Sale', 'Top Rated'];
 const CATEGORIES = ['immunity', 'vitamins', 'beauty', 'energy', 'weight', 'general'];
 const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+function getTierErrors(form) {
+  if (!form.pwywEnabled) return [];
+
+  const tiers = Array.isArray(form.pwywTiers) ? form.pwywTiers : [];
+  const errors = [];
+  if (tiers.length < 2 || tiers.length > 5) {
+    errors.push('Add between 2 and 5 tiers');
+  }
+
+  const labels = tiers.map((tier) => String(tier.label || '').trim().toLowerCase());
+  if (labels.some((label) => !label) || new Set(labels).size !== labels.length) {
+    errors.push('Tier labels must be present and unique');
+  }
+
+  const floor = Number(form.price);
+  if (tiers.some((tier) => !Number.isFinite(Number(tier.amount)) || Number(tier.amount) < floor)) {
+    errors.push('Each tier amount must be at least the product price');
+  }
+
+  if (tiers.filter((tier) => tier.isDefault).length !== 1) {
+    errors.push('Choose exactly one default tier');
+  }
+
+  return errors;
+}
 
 /** Client-side UX validation only — API must still validate. */
 function validateForm(form, files) {
@@ -37,6 +64,9 @@ function validateForm(form, files) {
   if (!Number.isFinite(price) || price <= 0) {
     return 'Price must be greater than 0';
   }
+
+  const tierErrors = getTierErrors(form);
+  if (tierErrors.length) return tierErrors[0];
 
   if (form.originalPrice !== '' && form.originalPrice != null) {
     const originalPrice = Number(form.originalPrice);
@@ -123,6 +153,10 @@ export default function AddProduct() {
           nafdac: p.nafdac || '',
           isFeatured: !!p.isFeatured,
           isActive: p.isActive !== false,
+          pwywEnabled: !!p.pwywEnabled,
+          pwywTiers: Array.isArray(p.pwywTiers)
+            ? p.pwywTiers.map((tier) => ({ ...tier, amount: String(tier.amount ?? '') }))
+            : [],
         });
 
         setExistingImages(p.images || []);
@@ -133,6 +167,28 @@ export default function AddProduct() {
 
   function set(k, v) {
     setForm((f) => ({ ...f, [k]: v }));
+  }
+
+  function setTier(index, key, value) {
+    setForm((current) => ({
+      ...current,
+      pwywTiers: current.pwywTiers.map((tier, tierIndex) =>
+        tierIndex === index ? { ...tier, [key]: value } : tier
+      ),
+    }));
+  }
+
+  function togglePwyw(enabled) {
+    setForm((current) => ({
+      ...current,
+      pwywEnabled: enabled,
+      pwywTiers: enabled && current.pwywTiers.length < 2
+        ? [
+            { label: 'Standard', amount: String(current.price || ''), isDefault: true },
+            { label: 'Supporter', amount: String(current.price || ''), isDefault: false },
+          ]
+        : current.pwywTiers,
+    }));
   }
 
   function handleFiles(fileList) {
@@ -217,6 +273,14 @@ export default function AddProduct() {
           .filter(Boolean),
         isFeatured: Boolean(form.isFeatured),
         isActive: status === 'active',
+        pwywEnabled: Boolean(form.pwywEnabled),
+        pwywTiers: form.pwywEnabled
+          ? form.pwywTiers.map((tier) => ({
+              label: String(tier.label || '').trim(),
+              amount: Number(tier.amount),
+              isDefault: Boolean(tier.isDefault),
+            }))
+          : [],
       };
 
       let saved;
@@ -390,6 +454,82 @@ export default function AddProduct() {
                 step="1"
               />
             </div>
+            <div style={{ marginTop: 16 }}>
+              <Toggle
+                label="Enable Pay What You Want"
+                checked={form.pwywEnabled}
+                onChange={togglePwyw}
+              />
+            </div>
+            {form.pwywEnabled && (
+              <div style={{ marginTop: 16, display: 'grid', gap: 12 }}>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>
+                  The lowest amount is the product&apos;s real price. Higher amounts are optional support.
+                </p>
+                {form.pwywTiers.map((tier, index) => (
+                  <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(110px, 0.7fr) auto auto', gap: 8, alignItems: 'end' }}>
+                    <Field
+                      label={`Tier ${index + 1} label`}
+                      value={tier.label}
+                      onChange={(value) => setTier(index, 'label', value)}
+                    />
+                    <Field
+                      label="Amount (₦)"
+                      value={tier.amount}
+                      onChange={(value) => setTier(index, 'amount', value)}
+                      type="number"
+                      min={form.price || 0}
+                      step="0.01"
+                    />
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 5, minHeight: 38, fontSize: 12, whiteSpace: 'nowrap' }}>
+                      <input
+                        type="radio"
+                        name="pwyw-default-tier"
+                        checked={Boolean(tier.isDefault)}
+                        onChange={() => setForm((current) => ({
+                          ...current,
+                          pwywTiers: current.pwywTiers.map((entry, tierIndex) => ({
+                            ...entry,
+                            isDefault: tierIndex === index,
+                          })),
+                        }))}
+                      />
+                      Default
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      disabled={form.pwywTiers.length <= 2}
+                      onClick={() => setForm((current) => ({
+                        ...current,
+                        pwywTiers: current.pwywTiers.filter((_, tierIndex) => tierIndex !== index),
+                      }))}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  disabled={form.pwywTiers.length >= 5}
+                  onClick={() => setForm((current) => ({
+                    ...current,
+                    pwywTiers: [...current.pwywTiers, {
+                      label: '', amount: String(current.price || ''), isDefault: false,
+                    }],
+                  }))}
+                  style={{ justifySelf: 'start' }}
+                >
+                  Add tier
+                </button>
+                {getTierErrors(form).map((message) => (
+                  <div key={message} role="alert" style={{ color: 'var(--error)', fontSize: 12 }}>
+                    {message}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="card">
