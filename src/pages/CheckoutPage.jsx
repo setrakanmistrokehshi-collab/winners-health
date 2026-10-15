@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { Link, useSearchParams } from 'react-router-dom';
 import useCartStore from '@/context/cartStore';
 import useAuthStore from '@/context/authStore';
-import api, { orders as ordersApi, payments as paymentsApi, products as productsApi, shipping as shippingApi } from '@/api/client';
+import api, { orders as ordersApi, payments as paymentsApi, shipping as shippingApi } from '@/api/client';
 import { Field } from '@/components/ui';
 import {
   formatNairaAmount as formatNaira,
@@ -23,7 +23,7 @@ import {
   requestPushPermission,
 } from '@/lib/onesignal';
 
-const GATEWAY_LABELS = { monnify: 'Monnify', bachs: 'Bachs' };
+const GATEWAY_LABELS = { monnify: 'Monnify', bachs: 'Bachs', paystack: 'Paystack', nomba: 'Nomba' };
 
 function normalizeLocation(value) {
   return String(value ?? '')
@@ -39,9 +39,19 @@ function unwrapShippingPayload(payload) {
   return body.shipping ?? body.quote ?? body;
 }
 
+function getSafeCheckoutUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function CheckoutPage() {
-  const { items, replaceItems, clear, markStale } = useCartStore();
+  const { items, markStale } = useCartStore();
   const user = useAuthStore((s) => s.user);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [searchParams] = useSearchParams();
   const retryOrderId = searchParams.get('retry');
   const restoredRetryId = useRef(null);
@@ -50,8 +60,11 @@ export default function CheckoutPage() {
   const [promoData, setPromoData] = useState(null);
   const [promoError, setPromoError] = useState('');
   const [gatewayError, setGatewayError] = useState('');
+  const [retryLoadError, setRetryLoadError] = useState('');
+  const [pendingRetryOrder, setPendingRetryOrder] = useState(null);
   const [checkingPromo, setCheckingPromo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [notifyOrderUpdates, setNotifyOrderUpdates] = useState(true);
   const [pushPermissionHint, setPushPermissionHint] = useState('');
   const [gateway, setGateway] = useState('monnify');
@@ -76,82 +89,50 @@ export default function CheckoutPage() {
   const state = watch('state');
 
   useEffect(() => {
-    if (gateway === 'bachs' && !['USD', 'NGN'].includes(currency.code)) {
-      setGateway('monnify');
-    }
-  }, [gateway, currency.code]);
-
-  useEffect(() => {
-    if (!retryOrderId || restoredRetryId.current === retryOrderId) return undefined;
+    if (!retryOrderId || !isAuthenticated || restoredRetryId.current === retryOrderId) return undefined;
 
     let active = true;
-    async function restorePendingOrder() {
+    async function loadPendingOrder() {
       try {
         const { data } = await ordersApi.get(retryOrderId);
         const body = data?.data ?? data ?? {};
         const pendingOrder = body.order ?? body;
-
-        if (!active || !Array.isArray(pendingOrder.items)) return;
-
-        const recoveryItems = pendingOrder.items
-          .map((item) => {
-            const product = item.product ?? item.productId ?? item;
-            const productId = product?._id ?? product?.id ?? item.productId;
-            return productId
-              ? { item, product, productId: String(productId), quantity: Number(item.quantity) || 1 }
-              : null;
-          })
-          .filter(Boolean);
-
-        if (recoveryItems.length === 0) {
-          throw new Error('Pending order has no recoverable products');
+        if (!active) return;
+        if (!pendingOrder?._id && !pendingOrder?.id) {
+          throw new Error('Order response did not include an order ID');
         }
-
-        // Fetch current product prices in the product API's base units. Never
-        // copy order snapshot prices here: order/payment values may be stored
-        // in currency minor units, while cart prices use the product contract.
-        const { data: revalidated } = await productsApi.revalidateCart(
-          recoveryItems.map(({ productId }) => productId)
-        );
-        const freshProducts = new Map(
-          (revalidated?.products ?? []).map((product) => [String(product.productId ?? product._id), product])
-        );
-
-        const restoredItems = recoveryItems.map(({ item, product, productId, quantity }) => {
-          const fresh = freshProducts.get(productId);
-          if (!fresh || fresh.available === false || !Number.isFinite(Number(fresh.price))) {
-            throw new Error('A product in this checkout is no longer available');
-          }
-
-          return {
-            ...product,
-            _id: productId,
-            name: item.name ?? product.name,
-            price: Number(fresh.price),
-            stock: fresh.stock,
-            image: item.image ?? product.image,
-            quantity,
-          };
-        });
-
+        if (String(pendingOrder.status ?? '').toLowerCase() !== 'pending') {
+          throw new Error('This order is not pending payment');
+        }
+        setPendingRetryOrder(pendingOrder);
+        restoredRetryId.current = retryOrderId;
+        setRetryLoadError('');
+      } catch {
         if (active) {
-          replaceItems(restoredItems);
-          restoredRetryId.current = retryOrderId;
+          setPendingRetryOrder(null);
+          setRetryLoadError('We could not load this order for payment. Please try again from your orders.');
         }
-      } catch (err) {
-        if (active) toast.error('We could not restore that checkout. Please start again.');
       }
     }
 
-    restorePendingOrder();
+    loadPendingOrder();
     return () => { active = false; };
-  }, [retryOrderId, replaceItems]);
+  }, [retryOrderId, isAuthenticated]);
 
   // Cart items come from Product.price (plain Naira) — see
   // config/cartMoney.js. The backend independently recomputes and
   // converts to kobo in routes/payments.js, so this is a display
   // preview only; it never determines the actual charge.
   const hasPwywItems = items.some((item) => item.pwywEnabled);
+  const retryCurrency = pendingRetryOrder?.currency?.code
+    ?? pendingRetryOrder?.currency
+    ?? pendingRetryOrder?.paymentCurrency
+    ?? currency.code;
+  const checkoutCurrencyCode = retryOrderId ? String(retryCurrency).toUpperCase() : 'NGN';
+  const bachsCurrencyAllowed = ['USD', 'NGN'].includes(checkoutCurrencyCode);
+  const checkoutPriceProps = (amount) => gateway === 'bachs'
+    ? { text: formatNaira(amount) }
+    : { amount };
   const hasStaleItems = items.some((item) => item.stale);
   const subtotal = items.reduce((sum, item) => sum + (item.pwywEnabled
     ? Number(item.lineTotal ?? item.price * item.quantity) || 0
@@ -293,16 +274,29 @@ export default function CheckoutPage() {
   };
 
   const onSubmit = async (formData) => {
-    if (items.length === 0) { toast.error('Cart is empty'); return; }
-    if (hasStaleItems) {
+    if (submittingRef.current) return;
+    if (!retryOrderId && items.length === 0) { toast.error('Cart is empty'); return; }
+    if (retryOrderId && !pendingRetryOrder) {
+      toast.error('We could not load this order for payment. Please try again from your orders.');
+      return;
+    }
+    if (retryOrderId && !isAuthenticated) {
+      toast.error('Sign in with the account that owns this order to retry payment.');
+      return;
+    }
+    if (gateway === 'bachs' && !bachsCurrencyAllowed) {
+      setGatewayError('Bachs is not available for this currency');
+      return;
+    }
+    if (!retryOrderId && hasStaleItems) {
       toast.error('Choose again for unavailable options before checkout');
       return;
     }
-    if (shippingQuoteLoading) {
+    if (!retryOrderId && shippingQuoteLoading) {
       toast.error('Calculating shipping fee. Please wait.');
       return;
     }
-    if (!shippingAvailable) {
+    if (!retryOrderId && !shippingAvailable) {
       toast.error(hasDeliveryLocation
         ? 'We do not currently deliver to this location'
         : 'Enter your city or state to calculate shipping');
@@ -319,6 +313,7 @@ export default function CheckoutPage() {
       }
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setGatewayError('');
     try {
@@ -363,41 +358,29 @@ export default function CheckoutPage() {
         },
         promoCode: promoData ? promo.trim().toUpperCase() : undefined,
         gateway,
-        currency: currency.code,
+        currency: gateway === 'bachs' ? 'NGN' : currency.code,
       };
 
-      let data;
-      if (gateway === 'bachs') {
-        const orderPayload = { ...payload };
-        delete orderPayload.gateway;
-        const { data: orderResponse } = await paymentsApi.checkout(orderPayload);
-        const orderBody = orderResponse?.data ?? orderResponse ?? {};
-        const orderId = orderBody.orderId ?? orderBody.order?._id ?? orderBody.order?.id ?? orderBody.id;
-        if (!orderId) {
-          throw new Error('We could not prepare this order for Bachs. Please try again.');
-        }
-
-        const paymentResponse = await ordersApi.pay(orderId, { gateway: 'bachs' });
-        data = paymentResponse.data?.data ?? paymentResponse.data;
-      } else {
-        const response = await paymentsApi.checkout(payload);
-        data = response.data;
-      }
-
-      if (data.checkoutUrl) {
-        clear();
-        window.location.href = data.checkoutUrl;
-      } else {
-        toast.error('Payment initiation failed');
-      }
+      const response = retryOrderId
+        ? await ordersApi.pay(retryOrderId, { gateway })
+        : await paymentsApi.checkout(payload);
+      const data = response.data?.data ?? response.data ?? {};
+      const checkoutUrl = getSafeCheckoutUrl(data.checkoutUrl);
+      if (!checkoutUrl) throw new Error('The payment provider returned an invalid checkout link. Please try again.');
+      window.location.assign(checkoutUrl);
     } catch (err) {
       const errorData = err?.response?.data || {};
       const errorCode = errorData.code || errorData.errorCode ||
         (typeof errorData.error === 'string' ? errorData.error : errorData.error?.code);
+      const bachsProviderError = errorData.gatewayResponse?.error_code || errorData.gatewayResponse?.errorCode;
       if (errorCode === 'BACHS_CURRENCY_UNSUPPORTED') {
         setGatewayError('Bachs is not available for this currency');
-      } else if (errorCode === 'BACHS_CHECKOUT_CREATE_FAILED') {
-        setGatewayError('We couldn’t start Bachs checkout. Please try again.');
+      } else if (gateway === 'bachs' && (
+        errorCode === 'BACHS_CHECKOUT_CREATE_FAILED' ||
+        bachsProviderError === 'FORBIDDEN' ||
+        err?.response?.status >= 500
+      )) {
+        setGatewayError('Bachs is temporarily unavailable. Choose another payment method or try again later.');
       } else if (errorCode === 'CART_LINE_STALE') {
         const details = errorData.line || errorData.cartLine || errorData.details?.line || errorData.details || {};
         const staleProductId = String(details.productId ?? details.product?._id ?? errorData.productId ?? '');
@@ -414,13 +397,23 @@ export default function CheckoutPage() {
         toast.error('This option is no longer available. Please choose again.');
       } else if (errorCode === 'PROMO_BELOW_FLOOR') {
         setPromoError("This promo can't be applied to the selected option.");
+      } else if (retryOrderId && [401, 403].includes(err?.response?.status)) {
+        toast.error('Sign in with the account that owns this order to retry payment.');
       } else {
-        toast.error(errorData.message || 'Checkout failed. Please try again.');
+        toast.error(errorData.message || err.message || 'Checkout failed. Please try again.');
       }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
+
+  const handleCheckoutSubmit = retryOrderId
+    ? (event) => {
+        event.preventDefault();
+        void onSubmit({});
+      }
+    : handleSubmit(onSubmit);
 
   return (
     <div style={{ padding: 'var(--space-8) 0 var(--space-16)' }}>
@@ -448,7 +441,17 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)}>
+        {retryOrderId && !isAuthenticated && (
+          <div role="alert" style={{ marginBottom: 'var(--space-5)', color: 'var(--error)' }}>
+            Sign in with the account that owns this order to retry payment.
+          </div>
+        )}
+        {retryLoadError && (
+          <div role="alert" style={{ marginBottom: 'var(--space-5)', color: 'var(--error)' }}>
+            {retryLoadError}
+          </div>
+        )}
+        <form onSubmit={handleCheckoutSubmit}>
           {hasStaleItems && (
             <div role="alert" style={{ marginBottom: 'var(--space-5)', color: 'var(--error)' }}>
               Choose again for unavailable options in your <Link to="/cart">cart</Link> before checkout.
@@ -507,9 +510,9 @@ export default function CheckoutPage() {
                     </div>
                     <span style={{ flexShrink: 0, marginLeft: 12 }}>
                       <PriceTag
-                        amount={item.pwywEnabled
+                        {...checkoutPriceProps(item.pwywEnabled
                           ? Number(item.lineTotal ?? item.price * item.quantity)
-                          : item.price * item.quantity}
+                          : item.price * item.quantity)}
                         size="sm"
                       />
                     </span>
@@ -560,7 +563,11 @@ export default function CheckoutPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-                  <LineItem label='Subtotal' priceAmount={subtotal} />
+                  <LineItem
+                    label='Subtotal'
+                    priceAmount={subtotal}
+                    priceText={gateway === 'bachs' ? formatNaira(subtotal) : undefined}
+                  />
                   <LineItem
                     label='Shipping'
                     value={!hasDeliveryLocation
@@ -570,12 +577,25 @@ export default function CheckoutPage() {
                       : !shippingAvailable
                         ? 'Unavailable for this location'
                         : shipping === 0 ? 'Free' : undefined}
-                        priceAmount={!shippingQuoteLoading && shippingAvailable && shipping > 0 ? shipping : undefined}
+                    priceAmount={!shippingQuoteLoading && shippingAvailable && shipping > 0 ? shipping : undefined}
+                    priceText={gateway === 'bachs' && !shippingQuoteLoading && shippingAvailable && shipping > 0 ? formatNaira(shipping) : undefined}
                     valueColor={!shippingAvailable || shipping === 0 ? 'var(--muted)' : undefined}
                   />
-                  {discount > 0 && <LineItem label={`Promo (${promoData?.discountPercent}%)`} priceAmount={-discount} valueColor='var(--success)' />}
+                  {discount > 0 && (
+                    <LineItem
+                      label={`Promo (${promoData?.discountPercent}%)`}
+                      priceAmount={-discount}
+                      priceText={gateway === 'bachs' ? formatNaira(-discount) : undefined}
+                      valueColor='var(--success)'
+                    />
+                  )}
                   <hr className='divider' style={{ margin: '4px 0' }} />
-                  <LineItem label='Total' priceAmount={total} bold />
+                  <LineItem
+                    label='Total'
+                    priceAmount={total}
+                    priceText={gateway === 'bachs' ? formatNaira(total) : undefined}
+                    bold
+                  />
                 </div>
 
                 {/* Payment method */}
@@ -583,7 +603,7 @@ export default function CheckoutPage() {
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--forest)', marginBottom: 8 }}>Payment method</div>
                   <GatewayPicker
                     value={gateway}
-                    currencyCode={currency.code}
+                    currencyCode={checkoutCurrencyCode}
                     onChange={(nextGateway) => {
                       setGateway(nextGateway);
                       setGatewayError('');
@@ -592,6 +612,11 @@ export default function CheckoutPage() {
                   {gatewayError && (
                     <p role="alert" style={{ color: 'var(--error)', fontSize: 13, marginTop: 8 }}>
                       {gatewayError}
+                    </p>
+                  )}
+                  {gateway === 'bachs' && !bachsCurrencyAllowed && !gatewayError && (
+                    <p role="alert" style={{ color: 'var(--error)', fontSize: 13, marginTop: 8 }}>
+                      Bachs is not available for this currency
                     </p>
                   )}
                 </div>
@@ -617,12 +642,12 @@ export default function CheckoutPage() {
                   type='submit'
                   className='btn btn-primary btn-full btn-lg'
                   style={{ marginTop: 'var(--space-5)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                  disabled={submitting || shippingQuoteLoading || !shippingAvailable || hasStaleItems}
+                  disabled={submitting || shippingQuoteLoading || !shippingAvailable || hasStaleItems || (gateway === 'bachs' && !bachsCurrencyAllowed) || (Boolean(retryOrderId) && !pendingRetryOrder)}
                 >
                   {submitting ? (
                     <><div className='spinner' style={{ width: 18, height: 18, borderColor: 'white' }} /> Processing...</>
                   ) : (
-                    <>Pay <PriceTag amount={total} size="md" strike={false} color="#ffffff" /> <ArrowRight size={18} strokeWidth={2.2} /></>
+                    <>Pay <PriceTag {...checkoutPriceProps(total)} size="md" strike={false} color="#ffffff" /> <ArrowRight size={18} strokeWidth={2.2} /></>
                   )}
                 </button>
 
@@ -640,12 +665,12 @@ export default function CheckoutPage() {
   );
 }
 
-function LineItem({ label, value, priceAmount, bold, valueColor }) {
+function LineItem({ label, value, priceAmount, priceText, bold, valueColor }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: bold ? 18 : 14, fontWeight: bold ? 700 : 400, color: bold ? 'var(--forest)' : 'var(--muted)' }}>
       <span>{label}</span>
       {priceAmount !== undefined
-        ? <PriceTag amount={priceAmount} size={bold ? 'lg' : 'sm'} muted={!bold} strike={false} />
+        ? <PriceTag {...(priceText !== undefined ? { text: priceText } : { amount: priceAmount })} size={bold ? 'lg' : 'sm'} muted={!bold} strike={false} />
         : <span style={{ color: valueColor }}>{value}</span>}
     </div>
   );

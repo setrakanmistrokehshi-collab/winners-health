@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { orders as ordersApi  } from '@/api/client';
+import useCartStore from '@/context/cartStore';
 import { PageLoader } from '@/components/ui';
 import { formatNaira } from '@/config/money';
 import { CheckCircle2, Clock3 } from 'lucide-react';
@@ -10,14 +11,12 @@ import { trackPurchase, purchaseEventId } from '@/lib/metaPixel';
 export default function OrderSuccessPage() {
   const [params] = useSearchParams();
   const ref = params.get('reference') || params.get('ref');
-  const [status, setStatus] = useState('loading');
+  const [status, setStatus] = useState(() => ref ? 'loading' : 'pending');
   const [order, setOrder]   = useState(null);
+  const clearCart = useCartStore((state) => state.clear);
 
  useEffect(() => {
-  if (!ref) {
-    setStatus('success');
-    return;
-  }
+  if (!ref) return undefined;
 
   let cancelled = false;
   let attempts = 0;
@@ -57,6 +56,7 @@ export default function OrderSuccessPage() {
 
     if (isConfirmed(data)) {
       setStatus('success');
+      clearCart();
       if (ord?._id) {
         trackPurchase(ord, purchaseEventId(ord._id));
       }
@@ -91,7 +91,7 @@ export default function OrderSuccessPage() {
     cancelled = true;
     clear();
   };
-}, [ref]);
+}, [ref, clearCart]);
 
   if (status === 'loading') return <PageLoader />;
 
