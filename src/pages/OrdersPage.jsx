@@ -6,7 +6,7 @@ import PaymentStatusBanner from '@/pages/Paymentstatusbanner';
 import { formatNaira } from '@/config/money';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
-import { Package, Truck, Box } from 'lucide-react';
+import { Package, Truck, Box, Home } from 'lucide-react';
 import PriceTag from '@/components/PriceTag';
 
 const PAGE_SIZE = 10;
@@ -94,7 +94,35 @@ export default function OrdersPage() {
   return (
     <div style={{ padding: 'var(--space-8) 0 var(--space-16)' }}>
       <div className='container'>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 32, marginBottom: 'var(--space-8)', color: 'var(--forest)' }}>My Orders</h1>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+            marginBottom: 'var(--space-8)',
+          }}
+        >
+          <h1
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 32,
+              margin: 0,
+              color: 'var(--forest)',
+            }}
+          >
+            My Orders
+          </h1>
+          <Link
+            to="/"
+            className="btn btn-outline btn-sm"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Home size={16} strokeWidth={2} aria-hidden="true" />
+            Home
+          </Link>
+        </div>
 
         {orderList.length === 0 ? (
           <EmptyState
@@ -133,7 +161,6 @@ export default function OrdersPage() {
 
                 <PaymentStatusBanner order={order} />
 
-                {/* Items preview */}
                 <div style={{ display: 'flex', gap: 8, marginTop: 'var(--space-4)', flexWrap: 'wrap' }}>
                   {order.items?.map((item, i) => (
                     <div key={i} style={{
@@ -148,7 +175,6 @@ export default function OrdersPage() {
                   ))}
                 </div>
 
-                {/* Actions */}
                 <div style={{ display: 'flex', gap: 8, marginTop: 'var(--space-4)', flexWrap: 'wrap', alignItems: 'center' }}>
                   <button className='btn btn-outline btn-sm' onClick={() => setSelected(order)}>
                     View Details
@@ -183,7 +209,6 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {/* Order detail modal */}
       <Modal
         open={!!selected}
         onClose={() => {
@@ -195,7 +220,6 @@ export default function OrdersPage() {
       >
         {selected && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-            {/* Status timeline */}
             <div>
               <h4 style={{ fontWeight: 600, marginBottom: 'var(--space-3)', fontSize: 14 }}>Status History</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -216,7 +240,6 @@ export default function OrdersPage() {
 
             <hr className='divider' />
 
-            {/* Items */}
             <div>
               <h4 style={{ fontWeight: 600, marginBottom: 'var(--space-3)', fontSize: 14 }}>Items</h4>
               {selected.items?.map((item, i) => (
@@ -230,7 +253,6 @@ export default function OrdersPage() {
               ))}
             </div>
 
-            {/* Totals */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {[
                 { l: 'Subtotal', v: formatNaira(selected.subtotal) },
@@ -246,7 +268,6 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            {/* Shipping address */}
             <div style={{ background: 'var(--parchment)', borderRadius: 'var(--radius)', padding: 'var(--space-4)', fontSize: 14 }}>
               <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--forest)' }}>Delivery Address</div>
               <div style={{ color: 'var(--muted)', lineHeight: 1.6 }}>
