@@ -9,8 +9,39 @@ import PaymentStatusBanner from '@/pages/Paymentstatusbanner';
 import { trackPurchase, purchaseEventId } from '@/lib/metaPixel';
 
 const POLL_MS = 2500;
-const MAX_ATTEMPTS = 24; // ~60s
+const MAX_ATTEMPTS = 24; // ~60s, then we stop polling and tell the customer what to expect
 
+// ADAPT: the key(s) where your checkout page keeps the guest token it sends to /payments/checkout.
+const GUEST_TOKEN_KEYS = ['guestToken', 'guest_token'];
+
+function getGuestToken() {
+  try {
+    for (const k of GUEST_TOKEN_KEYS) {
+      const v = sessionStorage.getItem(k) || localStorage.getItem(k);
+      if (v) return v;
+    }
+  } catch {
+    /* storage unavailable */
+  }
+  return null;
+}
+
+// Logged-in customers use the normal status call. Guests have no login token, so
+// that call returns 401: fall back to the guest endpoint (order id + guest token).
+async function fetchStatus(ref, checkoutId) {
+  try {
+    return await ordersApi.verifyStatus(ref, { checkoutId, live: true });
+  } catch (err) {
+    const code = err?.response?.status;
+    const token = getGuestToken();
+    if ((code === 401 || code === 403) && token && /^[a-f\d]{24}$/i.test(ref)) {
+      return await ordersApi.guestStatus(ref, token);
+    }
+    throw err;
+  }
+}
+
+// Returns: 'success' | 'failed' | 'review' | 'pending'
 function isConfirmed(data) {
   const payment = String(
     data?.paymentStatus ?? data?.order?.paymentStatus ?? ''
@@ -20,7 +51,11 @@ function isConfirmed(data) {
   ).toLowerCase();
 
   if (['cancelled', 'refunded', 'failed'].includes(orderStatus)) return 'failed';
-  if (['failed', 'cancelled', 'abandoned'].includes(payment)) return 'failed';
+  if (['failed', 'cancelled', 'abandoned', 'expired', 'rejected'].includes(payment)) {
+    return 'failed';
+  }
+  // Money arrived but the amount needs a human check: do NOT tell the customer to pay again.
+  if (['flagged_underpaid', 'discrepancy'].includes(payment)) return 'review';
 
   if (['completed', 'paid', 'success', 'successful'].includes(payment)) {
     return 'success';
@@ -39,6 +74,7 @@ export default function OrderSuccessPage() {
     params.get('orderId');
   const checkoutId = params.get('checkout_id') || params.get('checkoutId');
 
+  // loading | pending | success | failed | review | delayed
   const [status, setStatus] = useState(() => (ref ? 'loading' : 'pending'));
   const [order, setOrder] = useState(null);
   const clearCart = useCartStore((state) => state.clear);
@@ -48,6 +84,7 @@ export default function OrderSuccessPage() {
 
     let cancelled = false;
     let attempts = 0;
+    let delay = POLL_MS;
     let timer = null;
 
     const clear = () => {
@@ -57,14 +94,19 @@ export default function OrderSuccessPage() {
       }
     };
 
+    const retryLater = () => {
+      attempts += 1;
+      if (attempts < MAX_ATTEMPTS && !cancelled) {
+        timer = setTimeout(check, delay);
+      } else if (!cancelled) {
+        // Stop hammering the API. Not confirmed yet is not the same as failed.
+        setStatus('delayed');
+      }
+    };
+
     const check = async () => {
       try {
-        // Prefer an endpoint that live-verifies gateway when needed.
-        // Pass checkout_id so Bachs can GET /checkout-sessions/{chk_...}
-        const res = await ordersApi.verifyStatus(ref, {
-          checkoutId: checkoutId || undefined,
-          live: true,
-        });
+        const res = await fetchStatus(ref, checkoutId || undefined);
         const data = res?.data?.data ?? res?.data ?? res;
         if (cancelled) return;
 
@@ -75,9 +117,16 @@ export default function OrderSuccessPage() {
 
         if (result === 'success') {
           setStatus('success');
-          clearCart();
+          clearCart(); // only now: the server confirmed payment, not the redirect
           if (ord?._id) {
-            trackPurchase(ord, purchaseEventId(ord._id));
+            // Fire the pixel once per order, even if the customer refreshes this page.
+            const key = `purchase_tracked_${ord._id}`;
+            let already = false;
+            try { already = !!sessionStorage.getItem(key); } catch { /* ignore */ }
+            if (!already) {
+              trackPurchase(ord, purchaseEventId(ord._id));
+              try { sessionStorage.setItem(key, '1'); } catch { /* ignore */ }
+            }
           }
           return;
         }
@@ -87,22 +136,29 @@ export default function OrderSuccessPage() {
           return;
         }
 
-        setStatus('pending');
-        attempts += 1;
-        if (attempts < MAX_ATTEMPTS && !cancelled) {
-          timer = setTimeout(check, POLL_MS);
+        if (result === 'review') {
+          setStatus('review');
+          return;
         }
+
+        setStatus('pending');
+        retryLater();
       } catch (err) {
         if (cancelled) return;
 
-        setStatus('pending');
         const code = err?.response?.status;
-        if (code === 404 || code === 400) return;
 
-        attempts += 1;
-        if (attempts < MAX_ATTEMPTS && !cancelled) {
-          timer = setTimeout(check, POLL_MS);
+        // Cannot verify from this browser (not found / not allowed): stop and explain.
+        if (code === 400 || code === 401 || code === 403 || code === 404) {
+          setStatus('delayed');
+          return;
         }
+
+        // Rate limited: back off instead of retrying at the same pace.
+        if (code === 429) delay = Math.min(delay * 2, 15000);
+
+        setStatus('pending');
+        retryLater();
       }
     };
 
@@ -121,14 +177,22 @@ export default function OrderSuccessPage() {
       ? 'Order Confirmed!'
       : status === 'failed'
         ? 'Payment Not Completed'
-        : 'Confirming Payment…';
+        : status === 'review'
+          ? 'Payment Under Review'
+          : status === 'delayed'
+            ? 'Still Confirming Your Payment'
+            : 'Confirming Payment…';
 
   const message =
     status === 'success'
       ? "Thank you for your order! We'll process it and deliver as soon as possible."
       : status === 'failed'
         ? 'We could not confirm a successful payment. You can retry from My Orders or contact support.'
-        : 'Please wait while we confirm your payment with the provider. This usually takes a few seconds.';
+        : status === 'review'
+          ? 'We received your payment but need to verify the amount. Our team will contact you shortly. Please do not pay again.'
+          : status === 'delayed'
+            ? "We haven't received confirmation from the payment provider yet. Please don't pay again. We'll email you as soon as it's confirmed, and you can check My Orders at any time."
+            : 'Please wait while we confirm your payment with the provider. This usually takes a few seconds.';
 
   return (
     <div
@@ -178,26 +242,29 @@ export default function OrderSuccessPage() {
           )}
         </div>
 
-        <h1
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 36,
-            color: 'var(--forest-deep)',
-            marginBottom: 12,
-          }}
-        >
-          {title}
-        </h1>
-        <p
-          style={{
-            color: 'var(--muted)',
-            lineHeight: 1.7,
-            marginBottom: 'var(--space-8)',
-            fontSize: 16,
-          }}
-        >
-          {message}
-        </p>
+        {/* aria-live so screen readers announce the change from "Confirming" to "Confirmed" */}
+        <div role="status" aria-live="polite">
+          <h1
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 36,
+              color: 'var(--forest-deep)',
+              marginBottom: 12,
+            }}
+          >
+            {title}
+          </h1>
+          <p
+            style={{
+              color: 'var(--muted)',
+              lineHeight: 1.7,
+              marginBottom: 'var(--space-8)',
+              fontSize: 16,
+            }}
+          >
+            {message}
+          </p>
+        </div>
 
         {order && (
           <div style={{ textAlign: 'left' }}>
