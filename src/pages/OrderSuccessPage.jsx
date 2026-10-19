@@ -99,7 +99,7 @@ export default function OrderSuccessPage() {
       if (attempts < MAX_ATTEMPTS && !cancelled) {
         timer = setTimeout(check, delay);
       } else if (!cancelled) {
-        // Stop hammering the API. Not confirmed yet is not the same as failed.
+        
         setStatus('delayed');
       }
     };
@@ -115,9 +115,14 @@ export default function OrderSuccessPage() {
 
         const result = isConfirmed(data);
 
+        // The gateway only sends the customer to this page after the hosted checkout
+        // finished (cancel goes to a different URL) and the order exists. So the cart must
+        // not stay full just because confirmation is slow. Purchase tracking below still
+        // waits for a confirmed payment.
+        if (result !== 'failed') clearCart();
+
         if (result === 'success') {
           setStatus('success');
-          clearCart(); // only now: the server confirmed payment, not the redirect
           if (ord?._id) {
             // Fire the pixel once per order, even if the customer refreshes this page.
             const key = `purchase_tracked_${ord._id}`;
@@ -150,6 +155,8 @@ export default function OrderSuccessPage() {
 
         // Cannot verify from this browser (not found / not allowed): stop and explain.
         if (code === 400 || code === 401 || code === 403 || code === 404) {
+          
+          if (code === 401 || code === 403) clearCart();
           setStatus('delayed');
           return;
         }
