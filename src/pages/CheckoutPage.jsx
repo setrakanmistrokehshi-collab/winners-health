@@ -85,6 +85,7 @@ export default function CheckoutPage() {
   const [pushPermissionHint, setPushPermissionHint] = useState('');
   const [gateway, setGateway] = useState('monnify');
   const [shippingQuote, setShippingQuote] = useState(null);
+  const clearCart = useCartStore((state) => state.clear);
   const [shippingQuoteLoading, setShippingQuoteLoading] = useState(false);
   const [shippingConfig, setShippingConfig] = useState({
     shippingFee: 0,
@@ -496,6 +497,7 @@ export default function CheckoutPage() {
           'The payment provider returned an invalid checkout link. Please try again.'
         );
       }
+      if (!isRetryMode) clearCart();
 
       window.location.assign(checkoutUrl);
     } catch (err) {
