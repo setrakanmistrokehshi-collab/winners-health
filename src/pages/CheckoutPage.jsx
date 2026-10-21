@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useSearchParams } from 'react-router-dom';
 import useCartStore from '@/context/cartStore';
@@ -38,6 +38,7 @@ const COUNTRY_OPTIONS = [
   { value: 'cameroon', label: 'Cameroon' },
 ];
 
+// ── FIX: shared normalizers, used consistently by zone matcher and country gate
 function normalizeLocation(value) {
   return String(value ?? '')
     .toLowerCase()
@@ -45,6 +46,10 @@ function normalizeLocation(value) {
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+}
+
+function normalizeCountry(value) {
+  return String(value ?? '').toLowerCase().trim();
 }
 
 function unwrapShippingPayload(payload) {
@@ -61,6 +66,27 @@ function getSafeCheckoutUrl(value) {
   } catch {
     return null;
   }
+}
+
+// ── FIX: parse a raw zone from the backend into a stable internal shape.
+// Handles both the new schema ({country,state,city,price,freeThreshold}) and the
+// legacy shape ({name, price}) so deploys don't require a lockstep frontend/backend.
+function parseZone(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const country = String(raw.country ?? 'Nigeria').trim();
+  const state = raw.state ? String(raw.state).trim() : null;
+  const city = raw.city ? String(raw.city).trim() : null;
+  // Legacy fallback: if no country/state/city, treat `name` as a state name in Nigeria
+  const hasNewShape = raw.country != null || raw.state != null || raw.city != null;
+  return {
+    name: String(raw.name ?? '').trim(),
+    country,
+    state: hasNewShape ? state : (raw.name ? String(raw.name).trim() : null),
+    city: hasNewShape ? city : null,
+    price: Math.max(0, Number(raw.price) || 0),
+    freeThreshold:
+      raw.freeThreshold != null ? Math.max(0, Number(raw.freeThreshold) || 0) : null,
+  };
 }
 
 export default function CheckoutPage() {
@@ -85,11 +111,16 @@ export default function CheckoutPage() {
   const [pushPermissionHint, setPushPermissionHint] = useState('');
   const [gateway, setGateway] = useState('monnify');
   const [shippingQuote, setShippingQuote] = useState(null);
-  const clearCart = useCartStore((state) => state.clear);
   const [shippingQuoteLoading, setShippingQuoteLoading] = useState(false);
+  const clearCart = useCartStore((state) => state.clear);
+
+  // ── FIX: shipping config now matches the new schema; `loaded` gates the UI
+  const [configLoaded, setConfigLoaded] = useState(false);
   const [shippingConfig, setShippingConfig] = useState({
     shippingFee: 0,
-    freeShippingThreshold: 0,
+    freeThreshold: 0,
+    domesticCap:  { default: 5000 },
+    internationalEnabled: false,
     zones: [],
   });
 
@@ -118,7 +149,7 @@ export default function CheckoutPage() {
   const country = watch('country');
   const isRetryMode = Boolean(retryOrderId);
 
-  // ── Load pending order for retry ──────────────────────────────────────────
+  // ── Load pending order for retry (unchanged)
   useEffect(() => {
     if (!retryOrderId || !isAuthenticated || restoredRetryId.current === retryOrderId) {
       return undefined;
@@ -160,7 +191,7 @@ export default function CheckoutPage() {
     };
   }, [retryOrderId, isAuthenticated]);
 
-  // ── Derived values ────────────────────────────────────────────────────────
+  // ── Derived values
   const hasPwywItems = items.some((item) => item.pwywEnabled);
   const retryCurrency =
     pendingRetryOrder?.currency?.code ??
@@ -187,124 +218,150 @@ export default function CheckoutPage() {
     ? Math.round(subtotal * (promoData.discountPercent / 100))
     : 0;
 
-  const locationText = normalizeLocation(`${city || ''} ${state || ''}`);
-  const matchedZone = shippingConfig.zones.find((zone) => {
-    const zoneName = normalizeLocation(zone.name);
-    return (
-      zoneName &&
-      locationText &&
-      (locationText.includes(zoneName) || zoneName.includes(locationText))
-    );
-  });
+  // ── FIX: country is a first-class input, both for matching and for
+  // deciding whether international shipping is allowed at all.
+  const isNigeria = normalizeCountry(country) === 'nigeria';
+  const internationalEnabled = shippingConfig.internationalEnabled === true;
+  const hasDeliveryLocation = Boolean(
+    normalizeLocation(`${city || ''} ${state || ''}`)
+  );
 
-  const hasDeliveryLocation = Boolean(locationText);
-  const hasConfiguredZones = shippingConfig.zones.length > 0;
-  const localShippingAvailable =
-    hasDeliveryLocation && (!hasConfiguredZones || Boolean(matchedZone));
+  // ── FIX: zone matcher. Country is a hard gate; more specific wins.
+  // A Lagos-Nigeria zone can never match a Lagos-Portugal address.
+  const matchedZone = useMemo(() => {
+    const zones = shippingConfig.zones || [];
+    const nc = normalizeCountry(country);
+    if (!zones.length || !nc) return null;
+
+    const ns = normalizeLocation(state);
+    const ncity = normalizeLocation(city);
+
+    return (
+      zones
+        .filter((z) => normalizeCountry(z.country) === nc)
+        .map((z) => {
+          const zs = normalizeLocation(z.state);
+          const zc = normalizeLocation(z.city);
+          if (zs && !(ns && (ns.includes(zs) || zs.includes(ns)))) return null;
+          if (zc && !(ncity && (ncity.includes(zc) || zc.includes(ncity)))) return null;
+          return { zone: z, specificity: (zs ? 1 : 0) + (zc ? 2 : 0) };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.specificity - a.specificity)[0]?.zone ?? null
+    );
+  }, [shippingConfig.zones, country, state, city]);
+
+  // ── FIX: fail closed. No location → unavailable. International needs
+  // the master switch AND an explicit zone. Never "free by default".
   const shippingAvailable = shippingQuote
     ? shippingQuote.available !== false
-    : localShippingAvailable;
-  const shippingFee = shippingQuote
-    ? Number(shippingQuote.shippingFee ?? shippingQuote.fee ?? 0)
-    : shippingAvailable
-      ? Number(
-          matchedZone?.price ??
-            shippingConfig.shippingFee ??
-            shippingConfig.fee ??
-            0
-        )
-      : 0;
-  const freeShippingThreshold = Number(
-    shippingConfig.freeShippingThreshold ?? shippingConfig.freeThreshold ?? 0
+    : !hasDeliveryLocation
+      ? false
+      : isNigeria
+        ? true
+        : internationalEnabled && Boolean(matchedZone);
+
+  // ── FIX: cap applies to Nigeria only. International zone prices are
+  // charged as-is (the whole point of adding them explicitly).
+  const localRawFee = Number(
+    matchedZone?.price ?? shippingConfig.shippingFee ?? 0
   );
-  const shipping = shippingQuote
-    ? shippingFee
-    : shippingAvailable && subtotal - discount < freeShippingThreshold
-      ? shippingFee
-      : 0;
+  const localCapped = isNigeria
+    ? Math.min(localRawFee, shippingConfig.domesticCap ?? 500000)
+    : localRawFee;
+
+  // ── FIX: per-zone free threshold wins; Nigeria uses global; intl defaults to never-free.
+  const localThreshold =
+    matchedZone?.freeThreshold != null
+      ? Number(matchedZone.freeThreshold)
+      : isNigeria
+        ? Number(shippingConfig.freeThreshold ?? 0)
+        : null;
+
+  const localShipping = shippingAvailable
+    ? localThreshold != null && subtotal - discount >= localThreshold
+      ? 0
+      : localCapped
+    : 0;
+
+  // The server quote is authoritative when present.
+  const quoteShippingFee = shippingQuote
+    ? Number(shippingQuote.shippingFee ?? shippingQuote.fee ?? 0)
+    : null;
+
+  const shipping = shippingQuote ? quoteShippingFee : localShipping;
   const total = Number(
     shippingQuote?.total ?? subtotal + shipping - discount
   );
 
-  // ── Load shipping config once ─────────────────────────────────────────────
+  // ── Load shipping config once (unchanged logic, updated parsing)
   useEffect(() => {
     let mounted = true;
 
-    async function loadShippingConfig() {
+    async function loadShippingConfig(payload) {
+      const shippingOptions = unwrapShippingPayload(payload);
+      if (!mounted) return;
+
+      const zones = Array.isArray(shippingOptions.zones)
+        ? shippingOptions.zones.map(parseZone).filter(Boolean)
+        : [];
+
+      setShippingConfig({
+        shippingFee: Number(
+          shippingOptions.fee ??
+            shippingOptions.shippingFee ??
+            shippingOptions.standardFee ??
+            shippingOptions.price ??
+            0
+        ),
+        freeThreshold: Number(
+          shippingOptions.freeThreshold ??
+            shippingOptions.freeShippingThreshold ??
+            0
+        ),
+        domesticCap: Number(shippingOptions.domesticCap ?? 500000),
+        internationalEnabled: Boolean(shippingOptions.internationalEnabled),
+        zones,
+      });
+      setConfigLoaded(true); // ── FIX: only set true on real success
+    }
+
+    async function run() {
       try {
         const { data } = await shippingApi.getConfig();
-        const shippingOptions = unwrapShippingPayload(data);
-        if (!mounted) return;
-
-        setShippingConfig({
-          shippingFee: Number(
-            shippingOptions.standardFee ??
-              shippingOptions.fee ??
-              shippingOptions.shippingFee ??
-              shippingOptions.price ??
-              0
-          ),
-          freeShippingThreshold: Number(
-            shippingOptions.freeThreshold ??
-              shippingOptions.freeShippingThreshold ??
-              0
-          ),
-          zones: Array.isArray(shippingOptions.zones)
-            ? shippingOptions.zones.map((zone) => ({
-                name: String(zone.name ?? '').trim(),
-                price: Math.max(0, Number(zone.price) || 0),
-              }))
-            : [],
-        });
+        await loadShippingConfig(data);
       } catch {
-        // Temporary fallback while /shipping/config is being rolled out
         try {
           const { data } = await api.get('/admin/settings');
-          const shippingOptions = unwrapShippingPayload(data);
-          if (!mounted) return;
-
-          setShippingConfig({
-            shippingFee: Number(
-              shippingOptions.standardFee ??
-                shippingOptions.fee ??
-                shippingOptions.shippingFee ??
-                shippingOptions.price ??
-                0
-            ),
-            freeShippingThreshold: Number(
-              shippingOptions.freeThreshold ??
-                shippingOptions.freeShippingThreshold ??
-                0
-            ),
-            zones: Array.isArray(shippingOptions.zones)
-              ? shippingOptions.zones.map((zone) => ({
-                  name: String(zone.name ?? '').trim(),
-                  price: Math.max(0, Number(zone.price) || 0),
-                }))
-              : [],
-          });
+          await loadShippingConfig(data);
         } catch (fallbackError) {
           console.warn('Failed to load shipping configuration:', fallbackError);
+          // configLoaded stays false → submit remains disabled (fail closed)
         }
       }
     }
 
-    loadShippingConfig();
+    run();
     return () => {
       mounted = false;
     };
   }, []);
 
-  // ── Meta Pixel – fire once ────────────────────────────────────────────────
+  // ── Meta Pixel – fire once (unchanged)
   useEffect(() => {
     if (pixelFired.current || items.length === 0 || hasPwywItems) return;
     pixelFired.current = true;
     trackInitiateCheckout(items, subtotal, generateEventId());
   }, [items, hasPwywItems, subtotal]);
 
-  // ── Debounced shipping quote ──────────────────────────────────────────────
+  // ── Debounced shipping quote (skip useless calls for blocked intl)
   useEffect(() => {
-    if (!hasDeliveryLocation || isRetryMode) {
+    // ── FIX: don't even ask the backend for a quote if this order
+    // cannot be shipped — saves a round trip and avoids a bogus response.
+    const canQuote =
+      hasDeliveryLocation && !isRetryMode && (isNigeria || internationalEnabled);
+
+    if (!canQuote) {
       setShippingQuote(null);
       setShippingQuoteLoading(false);
       return undefined;
@@ -341,9 +398,11 @@ export default function CheckoutPage() {
     discount,
     hasDeliveryLocation,
     isRetryMode,
+    isNigeria,
+    internationalEnabled,
   ]);
 
-  // ── Promo ─────────────────────────────────────────────────────────────────
+  // ── Promo (unchanged)
   const handlePromo = async () => {
     if (!promo.trim()) return;
     setCheckingPromo(true);
@@ -354,14 +413,8 @@ export default function CheckoutPage() {
       );
       setPromoData(data);
       toast.success(
-        hasPwywItems
-          ? 'Promo applied'
-          : `${data.discountPercent}% promo applied`,
-        {
-          icon: (
-            <Check size={18} strokeWidth={2.5} color="var(--success)" />
-          ),
-        }
+        hasPwywItems ? 'Promo applied' : `${data.discountPercent}% promo applied`,
+        { icon: <Check size={18} strokeWidth={2.5} color="var(--success)" /> }
       );
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Invalid promo code');
@@ -371,7 +424,7 @@ export default function CheckoutPage() {
     }
   };
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // ── Submit (unchanged logic; keep clearCart on successful redirect)
   const onSubmit = async (formData) => {
     if (submittingRef.current) return;
 
@@ -386,9 +439,7 @@ export default function CheckoutPage() {
       return;
     }
     if (isRetryMode && !isAuthenticated) {
-      toast.error(
-        'Sign in with the account that owns this order to retry payment.'
-      );
+      toast.error('Sign in with the account that owns this order to retry payment.');
       return;
     }
     if (gateway === 'bachs' && !bachsCurrencyAllowed) {
@@ -403,10 +454,17 @@ export default function CheckoutPage() {
       toast.error('Calculating shipping fee. Please wait.');
       return;
     }
+    // ── FIX: submit refuses when config never loaded (fail closed)
+    if (!isRetryMode && !configLoaded && !shippingQuote) {
+      toast.error('Loading shipping information. Please wait a moment.');
+      return;
+    }
     if (!isRetryMode && !shippingAvailable) {
       toast.error(
         hasDeliveryLocation
-          ? 'We do not currently deliver to this location'
+          ? isNigeria
+            ? 'We do not currently deliver to this location'
+            : `We don't currently ship to ${country}`
           : 'Enter your city or state to calculate shipping'
       );
       return;
@@ -497,6 +555,20 @@ export default function CheckoutPage() {
           'The payment provider returned an invalid checkout link. Please try again.'
         );
       }
+
+      // ── FIX: persist guest token so /order-success can authenticate its polls.
+      const guestToken = data.guestToken || data.guest_token;
+      if (guestToken) {
+        try {
+          sessionStorage.setItem('guestToken', guestToken);
+          localStorage.setItem('guestToken', guestToken);
+        } catch {
+          /* storage blocked — success page will land on 'delayed' but order is confirmed server-side */
+        }
+      }
+
+      
+      // Retry mode skips this — the cart holds unrelated items.
       if (!isRetryMode) clearCart();
 
       window.location.assign(checkoutUrl);
@@ -531,10 +603,7 @@ export default function CheckoutPage() {
           errorData.details ||
           {};
         const staleProductId = String(
-          details.productId ??
-            details.product?._id ??
-            errorData.productId ??
-            ''
+          details.productId ?? details.product?._id ?? errorData.productId ?? ''
         );
         const staleTierId = String(
           details.chosenTierId ?? errorData.chosenTierId ?? ''
@@ -557,17 +626,12 @@ export default function CheckoutPage() {
         }
 
         markStale(
-          affected.map(
-            (item) => item.cartKey || item.lineId || String(item._id)
-          )
+          affected.map((item) => item.cartKey || item.lineId || String(item._id))
         );
         toast.error('This option is no longer available. Please choose again.');
       } else if (errorCode === 'PROMO_BELOW_FLOOR') {
         setPromoError("This promo can't be applied to the selected option.");
-      } else if (
-        isRetryMode &&
-        [401, 403].includes(err?.response?.status)
-      ) {
+      } else if (isRetryMode && [401, 403].includes(err?.response?.status)) {
         toast.error(
           'Sign in with the account that owns this order to retry payment.'
         );
@@ -591,9 +655,11 @@ export default function CheckoutPage() {
       }
     : handleSubmit(onSubmit);
 
+  // ── FIX: submit is disabled until shipping is fully resolved.
   const submitDisabled =
     submitting ||
     shippingQuoteLoading ||
+    (!isRetryMode && !configLoaded && !shippingQuote) ||
     (!isRetryMode && !shippingAvailable) ||
     hasStaleItems ||
     (gateway === 'bachs' && !bachsCurrencyAllowed) ||
@@ -613,7 +679,7 @@ export default function CheckoutPage() {
           Checkout
         </h1>
 
-        {/* Price change banner */}
+        {/* Price change banner (unchanged) */}
         {!hasPwywItems && priceChanges?.priceChanges?.length > 0 && (
           <div
             style={{
@@ -652,7 +718,6 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {/* Auth required for retry */}
         {isRetryMode && !isAuthenticated && (
           <div
             role="alert"
@@ -662,7 +727,6 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {/* Retry load error */}
         {retryLoadError && (
           <div
             role="alert"
@@ -692,7 +756,7 @@ export default function CheckoutPage() {
               alignItems: 'start',
             }}
           >
-            {/* ── Left column ── */}
+            {/* ── Left column (unchanged) */}
             <div
               style={{
                 display: 'flex',
@@ -703,10 +767,7 @@ export default function CheckoutPage() {
               {/* Contact */}
               <div
                 className="card"
-                style={{
-                  padding: 'var(--space-6)',
-                  opacity: isRetryMode ? 0.7 : 1,
-                }}
+                style={{ padding: 'var(--space-6)', opacity: isRetryMode ? 0.7 : 1 }}
               >
                 <h2
                   style={{
@@ -777,10 +838,7 @@ export default function CheckoutPage() {
               {/* Delivery Address */}
               <div
                 className="card"
-                style={{
-                  padding: 'var(--space-6)',
-                  opacity: isRetryMode ? 0.7 : 1,
-                }}
+                style={{ padding: 'var(--space-6)', opacity: isRetryMode ? 0.7 : 1 }}
               >
                 <h2
                   style={{
@@ -811,10 +869,7 @@ export default function CheckoutPage() {
                     gap: 'var(--space-4)',
                   }}
                 >
-                  <Field
-                    label="Street Address *"
-                    error={errors.street?.message}
-                  >
+                  <Field label="Street Address *" error={errors.street?.message}>
                     <input
                       className={`input ${errors.street ? 'error' : ''}`}
                       placeholder="12 Adeola Odeku Street"
@@ -843,10 +898,7 @@ export default function CheckoutPage() {
                         })}
                       />
                     </Field>
-                    <Field
-                      label="State / Region *"
-                      error={errors.state?.message}
-                    >
+                    <Field label="State / Region *" error={errors.state?.message}>
                       <input
                         className={`input ${errors.state ? 'error' : ''}`}
                         placeholder="Lagos State"
@@ -876,7 +928,7 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              {/* Order Items */}
+              {/* Order Items (unchanged) */}
               <div className="card" style={{ padding: 'var(--space-6)' }}>
                 <h2
                   style={{
@@ -928,9 +980,7 @@ export default function CheckoutPage() {
                           {item.name}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-                          {item.chosenTierLabel
-                            ? `${item.chosenTierLabel} · `
-                            : ''}
+                          {item.chosenTierLabel ? `${item.chosenTierLabel} · ` : ''}
                           Qty: {item.quantity}
                         </div>
                       </div>
@@ -939,9 +989,7 @@ export default function CheckoutPage() {
                       <PriceTag
                         {...checkoutPriceProps(
                           item.pwywEnabled
-                            ? Number(
-                                item.lineTotal ?? item.price * item.quantity
-                              )
+                            ? Number(item.lineTotal ?? item.price * item.quantity)
                             : item.price * item.quantity
                         )}
                         size="sm"
@@ -952,11 +1000,8 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {/* ── Right: Summary ── */}
-            <div
-              className="checkout-summary"
-              style={{ position: 'sticky', top: 80 }}
-            >
+            {/* ── Right: Summary */}
+            <div className="checkout-summary" style={{ position: 'sticky', top: 80 }}>
               <div className="card" style={{ padding: 'var(--space-6)' }}>
                 <h2
                   style={{
@@ -969,7 +1014,7 @@ export default function CheckoutPage() {
                   Order Summary
                 </h2>
 
-                {/* Promo */}
+                {/* Promo (unchanged) */}
                 {!isRetryMode && (
                   <div style={{ marginBottom: 'var(--space-4)' }}>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -1024,11 +1069,7 @@ export default function CheckoutPage() {
                     {promoError && (
                       <div
                         role="alert"
-                        style={{
-                          color: 'var(--error)',
-                          fontSize: 12,
-                          marginTop: 5,
-                        }}
+                        style={{ color: 'var(--error)', fontSize: 12, marginTop: 5 }}
                       >
                         {promoError}
                       </div>
@@ -1051,6 +1092,8 @@ export default function CheckoutPage() {
                       gateway === 'bachs' ? formatNaira(subtotal) : undefined
                     }
                   />
+                  {/* ── FIX: shipping line is honest about what's happening
+                      instead of falsely showing "Free" on config failure. */}
                   <LineItem
                     label="Shipping"
                     value={
@@ -1060,11 +1103,15 @@ export default function CheckoutPage() {
                           ? 'Enter state or city'
                           : shippingQuoteLoading
                             ? 'Calculating...'
-                            : !shippingAvailable
-                              ? 'Unavailable for this location'
-                              : shipping === 0
-                                ? 'Free'
-                                : undefined
+                            : !configLoaded && !shippingQuote
+                              ? 'Loading...'
+                              : !shippingAvailable
+                                ? !isNigeria && !internationalEnabled
+                                  ? 'International shipping not available'
+                                  : `We don't currently ship to ${country}`
+                                : shipping === 0
+                                  ? 'Free'
+                                  : undefined
                     }
                     priceAmount={
                       !isRetryMode &&
@@ -1094,9 +1141,7 @@ export default function CheckoutPage() {
                       label={`Promo (${promoData?.discountPercent}%)`}
                       priceAmount={-discount}
                       priceText={
-                        gateway === 'bachs'
-                          ? formatNaira(-discount)
-                          : undefined
+                        gateway === 'bachs' ? formatNaira(-discount) : undefined
                       }
                       valueColor="var(--success)"
                     />
@@ -1105,14 +1150,12 @@ export default function CheckoutPage() {
                   <LineItem
                     label="Total"
                     priceAmount={total}
-                    priceText={
-                      gateway === 'bachs' ? formatNaira(total) : undefined
-                    }
+                    priceText={gateway === 'bachs' ? formatNaira(total) : undefined}
                     bold
                   />
                 </div>
 
-                {/* Gateway */}
+                {/* Gateway (unchanged) */}
                 <div style={{ marginTop: 'var(--space-5)' }}>
                   <div
                     style={{
@@ -1135,32 +1178,22 @@ export default function CheckoutPage() {
                   {gatewayError && (
                     <p
                       role="alert"
-                      style={{
-                        color: 'var(--error)',
-                        fontSize: 13,
-                        marginTop: 8,
-                      }}
+                      style={{ color: 'var(--error)', fontSize: 13, marginTop: 8 }}
                     >
                       {gatewayError}
                     </p>
                   )}
-                  {gateway === 'bachs' &&
-                    !bachsCurrencyAllowed &&
-                    !gatewayError && (
-                      <p
-                        role="alert"
-                        style={{
-                          color: 'var(--error)',
-                          fontSize: 13,
-                          marginTop: 8,
-                        }}
-                      >
-                        Bachs is not available for this currency
-                      </p>
-                    )}
+                  {gateway === 'bachs' && !bachsCurrencyAllowed && !gatewayError && (
+                    <p
+                      role="alert"
+                      style={{ color: 'var(--error)', fontSize: 13, marginTop: 8 }}
+                    >
+                      Bachs is not available for this currency
+                    </p>
+                  )}
                 </div>
 
-                {/* Push notifications */}
+                {/* Push notifications (unchanged) */}
                 {isPushConfigured() && (
                   <div className="checkout-notify">
                     <label className="checkout-notify-label">
@@ -1186,7 +1219,7 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
-                {/* Submit */}
+                {/* Submit (unchanged UI, new disable logic above) */}
                 <button
                   type="submit"
                   className="btn btn-primary btn-full btn-lg"
@@ -1203,11 +1236,7 @@ export default function CheckoutPage() {
                     <>
                       <div
                         className="spinner"
-                        style={{
-                          width: 18,
-                          height: 18,
-                          borderColor: 'white',
-                        }}
+                        style={{ width: 18, height: 18, borderColor: 'white' }}
                       />
                       Processing...
                     </>
@@ -1225,12 +1254,7 @@ export default function CheckoutPage() {
                   )}
                 </button>
 
-                <div
-                  style={{
-                    marginTop: 'var(--space-4)',
-                    textAlign: 'center',
-                  }}
-                >
+                <div style={{ marginTop: 'var(--space-4)', textAlign: 'center' }}>
                   <div
                     style={{
                       display: 'flex',
